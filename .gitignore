@@ -1,21 +1,41 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environment
-.venv/
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+eggs/
+*.egg-info/
+*.egg
+
+# Virtual Environments
+.env
+.venv
+.venv-py312/
+env/
 venv/
 ENV/
-env/
-venv.bak/
-env.bak/
 
 # IDE / Editor specific
 .vscode/
 .idea/
-*.swp
-*.swo
+*.sublime-project
+*.sublime-workspace
 
 # macOS
 .DS_Store
+
+# Logs and databases
+*.log
+*.sqlite3
+*.sqlite3-journal
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
