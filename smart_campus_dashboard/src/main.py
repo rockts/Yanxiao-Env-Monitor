@@ -1614,7 +1614,7 @@ class SmartCampusDashboard:
         if hasattr(self, '_mqtt_connected') and not self._mqtt_connected:
             # 如果MQTT断开连接，尝试重连
             if (self._mqtt_client is None or not self._mqtt_client.is_connected()):
-                self.reconnect_mqtt()
+                self.connect_mqtt()
                 self.update_connection_status_display(False, "正在重新连接MQTT服务器...")
         
         # 检查视频流状态
@@ -1727,3 +1727,39 @@ class SmartCampusDashboard:
             logging.error(f"内存清理过程中出错: {e}")
             # 即使出错，仍然计划下一次清理
             self.root.after(30 * 60 * 1000, self.clean_memory)
+
+
+# 主程序入口点
+if __name__ == "__main__":
+    print("DEBUG: __main__ block started")
+    
+    # 设置中文区域设置以支持中文日期
+    original_locale_time = locale.getlocale(locale.LC_TIME)
+    try:
+        locale.setlocale(locale.LC_TIME, 'zh_CN.UTF-8')
+    except locale.Error:
+        print("警告: 无法设置中文区域设置 (zh_CN.UTF-8)。尝试其他中文区域设置...")
+        try:
+            locale.setlocale(locale.LC_TIME, 'Chinese_China.936')  # Windows专用
+        except locale.Error:
+            print("警告: 无法设置 'Chinese_China.936'。星期几可能以默认语言显示。")
+            # 如果设置失败，恢复原始区域设置
+            locale.setlocale(locale.LC_TIME, original_locale_time)
+
+    # 创建主窗口
+    root = tk.Tk()
+    root.geometry("1280x768")  # 设置默认窗口大小
+    root.configure(bg=PAGE_BG_COLOR)
+    
+    # 创建应用实例
+    app = SmartCampusDashboard(root)  # 这将处理所有设置包括MQTT
+    
+    print("DEBUG: 启动Tkinter主循环...")
+    root.mainloop()
+    print("DEBUG: Tkinter主循环结束。")
+    
+    # 恢复区域设置
+    try:
+        locale.setlocale(locale.LC_TIME, original_locale_time)
+    except Exception:
+        pass  # 忽略最终清理过程中的错误
