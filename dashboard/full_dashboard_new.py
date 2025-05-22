@@ -37,11 +37,7 @@ try:
     logging.info("成功导入配置和数据管理模块")
 except ImportError as e:
     logging.warning(f"无法导入自定义模块: {e}")
-    CONFIG_MODULES_AVAILABLE = False -*- coding: utf-8 -*-
-"""
-智慧校园环境监测系统 - 完整版仪表盘
-显示所有传感器数据、实时视频监控和环境指标
-"""
+    CONFIG_MODULES_AVAILABLE = False
 
 import os
 import sys
