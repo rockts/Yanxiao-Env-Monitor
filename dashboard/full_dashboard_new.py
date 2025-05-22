@@ -19,14 +19,34 @@ import base64
 from pathlib import Path
 from io import BytesIO
 
+# 添加详细的调试功能
+print("开始加载依赖项...")
+
+def debug_print(message, show_traceback=False):
+    """增强的调试打印函数"""
+    print(f"[DEBUG] {message}")
+    if show_traceback:
+        traceback.print_exc()
+    # 同时写入日志文件
+    with open("dashboard_debug.log", "a") as f:
+        f.write(f"{datetime.datetime.now()} - {message}\n")
+        if show_traceback:
+            f.write(traceback.format_exc() + "\n")
+
+# 在全局作用域级别进行调试
+debug_print("设置调试环境")
+
 import tkinter as tk
 from tkinter import ttk, font, messagebox
 import paho.mqtt.client as mqtt
+
+print("基础依赖项加载完成")
 
 # 添加src目录到Python路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(current_dir, "src")
 sys.path.append(src_dir)
+print(f"添加路径 {src_dir} 到Python路径")
 
 # 导入自定义模块 - 使用try/except以便在模块不存在时也能运行
 try:
