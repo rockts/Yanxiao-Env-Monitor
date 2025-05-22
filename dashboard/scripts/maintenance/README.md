@@ -6,6 +6,6 @@
 
 - **advanced_cleanup.sh** - 进阶清理脚本，用于删除空文件和冗余文件
 - **cleanup_redundant_files.sh** - 清理多余文件脚本，用于删除重复和无用文件
-- **cleanup_src.sh** - 源代码目录清理脚本，用于整理src目录文件
+- **cleanup_src.sh** - 源代码目录清理脚本，用于整理 src 目录文件
 
 这些脚本主要用于系统维护和整理，通常不需要日常运行。
