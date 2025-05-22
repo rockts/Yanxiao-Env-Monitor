@@ -1,3 +1,0 @@
-main_dashboard.py started at 2025-05-21 20:37:38 from /Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/dashboard
-Python executable: /Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/.venv/bin/python3
-sys.path: ['/Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/dashboard/src', '/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python313.zip', '/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13', '/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload', '/Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/.venv/lib/python3.13/site-packages', '/usr/local/opt/python-tk@3.13/libexec']
