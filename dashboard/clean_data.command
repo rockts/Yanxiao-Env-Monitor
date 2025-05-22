@@ -1,16 +1,18 @@
 #!/bin/bash
-# 智慧校园环境监测系统 - 数据清理脚本
+# 智慧校园环境监测系统 - 数据清理快捷脚本
+# 版本: 1.0
+# 日期: 2025-05-22
 
 # 获取脚本所在目录
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$SCRIPT_DIR"
 
-# 颜色定义
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+# 调用实际的清理脚本
+./scripts/clean_data.sh "$@"
+
+# 脚本结束提示
+echo ""
+echo "快捷方式: clean_data.command"
 
 # 显示标题
 echo -e "${BLUE}=======================================================${NC}"
