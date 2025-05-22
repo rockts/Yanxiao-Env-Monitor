@@ -1,0 +1,24 @@
+{
+  "mqtt": {
+    "broker_host": "localhost",
+    "broker_port": 1883,
+    "client_id": "smart_campus_dashboard",
+    "username": "siot",
+    "password": "dfrobot"
+  },
+  "logging": {
+    "level": "INFO",
+    "log_dir": "logs",
+    "log_file_prefix": "dashboard"
+  },
+  "ui": {
+    "window_title": "烟铺小学智慧校园环境监测系统",
+    "window_size": "1280x720",
+    "use_fullscreen": false,
+    "update_interval": 1000
+  },
+  "simulator": {
+    "enabled": true,
+    "update_interval": 3000
+  }
+}

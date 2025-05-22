@@ -1,0 +1,115 @@
+{
+    "mqtt": {
+        "broker_host": "192.168.1.129",
+        "broker_port": 1883,
+        "client_id": "smart_campus_dashboard",
+        "username": "siot",
+        "password": "dfrobot",
+        "topics": [
+            "siot/环境温度",
+            "siot/环境湿度",
+            "siot/aqi",
+            "siot/tvoc",
+            "siot/eco2",
+            "siot/紫外线指数",
+            "siot/uv风险等级",
+            "siot/噪音",
+            "sc/camera/stream",
+            "siot/摄像头"
+        ]
+    },
+    "ui": {
+        "window_title": "烟铺小学智慧校园环境监测系统 - 完整版",
+        "window_size": "1280x800",
+        "subtitle": "完整版 | 实时监测 | 数据分析",
+        "version": "版本 2.1 | 2025年5月22日",
+        "colors": {
+            "bg_color": "#1E1E1E",
+            "text_color": "#FFFFFF",
+            "panel_bg": "#2D2D2D",
+            "accent_color": "#4CAF50",
+            "warning_color": "#FFA500",
+            "error_color": "#FF6666",
+            "success_color": "#33FF99"
+        }
+    },
+    "sensors": {
+        "环境温度": {
+            "display": "温度",
+            "unit": "°C",
+            "icon": "🌡️",
+            "warning_threshold": 28,
+            "critical_threshold": 32
+        },
+        "环境湿度": {
+            "display": "湿度",
+            "unit": "%RH",
+            "icon": "💧",
+            "warning_threshold": 75,
+            "critical_threshold": 85
+        },
+        "aqi": {
+            "display": "AQI",
+            "unit": "",
+            "icon": "💨",
+            "warning_threshold": 100,
+            "critical_threshold": 150
+        },
+        "tvoc": {
+            "display": "TVOC",
+            "unit": "ppb",
+            "icon": "🧪",
+            "warning_threshold": 400,
+            "critical_threshold": 500
+        },
+        "eco2": {
+            "display": "eCO2",
+            "unit": "ppm",
+            "icon": "🌿",
+            "warning_threshold": 1000,
+            "critical_threshold": 1500
+        },
+        "紫外线指数": {
+            "display": "紫外线指数",
+            "unit": "",
+            "icon": "☀️",
+            "warning_threshold": 5,
+            "critical_threshold": 8
+        },
+        "uv风险等级": {
+            "display": "UV风险",
+            "unit": "",
+            "icon": "⚠️"
+        },
+        "噪音": {
+            "display": "噪音",
+            "unit": "dB",
+            "icon": "🔊",
+            "warning_threshold": 60,
+            "critical_threshold": 70
+        }
+    },
+    "video": {
+        "enabled": true,
+        "width": 480,
+        "height": 360,
+        "frame_rate": 5,
+        "title": "📹 校园实时监控"
+    },
+    "data_logging": {
+        "enabled": true,
+        "interval_minutes": 5,
+        "max_log_days": 7,
+        "log_directory": "data/sensor_logs"
+    },
+    "simulation_data": {
+        "环境温度": "25.6",
+        "环境湿度": "68.2",
+        "aqi": "52",
+        "tvoc": "320",
+        "eco2": "780",
+        "紫外线指数": "2.8",
+        "uv风险等级": "低",
+        "噪音": "45.5"
+    }
+}

@@ -1,0 +1,19 @@
+# 智慧校园环境监测系统 - 依赖列表
+
+# 核心依赖
+paho-mqtt>=1.6.1    # MQTT客户端
+Pillow>=9.0.0       # 图像处理库，用于视频流显示
+
+# 可选依赖 - 高级功能
+# numpy>=1.22.0      # 科学计算库，用于高级图像处理
+# matplotlib>=3.5.1  # 图形图表库，用于数据可视化
+
+# 系统依赖（通常已随Python安装）
+# tkinter            # GUI界面库
+
+# 注意：tkinter通常随Python安装，不需要单独安装
+# 如果缺失，请参考操作系统特定指南安装tkinter：
+# - Ubuntu/Debian: sudo apt-get install python3-tk
+# - Fedora: sudo dnf install python3-tkinter
+# - macOS (Homebrew): brew install python-tk
+# - Windows: 通常已随Python安装包附带

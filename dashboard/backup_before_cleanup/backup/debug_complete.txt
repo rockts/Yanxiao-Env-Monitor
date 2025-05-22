@@ -1,0 +1,3 @@
+调试脚本已完成运行。
+日志文件位于: /Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/dashboard/debug_logs/debug_startup_20250521_193713.log
+完成时间: 2025-05-21T19:37:19.662557

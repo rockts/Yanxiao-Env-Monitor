@@ -1,0 +1,10 @@
+{
+    "siot_server_http": "http://localhost:8080",
+    "siot_username": "siot",
+    "siot_password": "dfrobot",
+    "mqtt_broker_host": "localhost",
+    "mqtt_broker_port": 1883,
+    "mqtt_client_id": "smart_campus_dashboard_client_local",
+    "mqtt_camera_topic": "sc/camera/stream",
+    "mqtt_weather_topic": "sc/weather/data"
+}
