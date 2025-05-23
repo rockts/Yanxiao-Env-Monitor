@@ -18,34 +18,27 @@
 print("脚本开始执行...") # DEBUG: Script start
 
 # 导入必要的库
-# 添加日志功能
-import logging
 import os
-from datetime import datetime
+import json
+import logging
+import random
+import time
+import requests # For weather API
+import paho.mqtt.client as mqtt
+import tkinter as tk
+from tkinter import ttk # Added ttk import
+# 添加日志功能
+import base64
+import io
+import threading
+from datetime import datetime, timedelta
+from collections import deque
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib import dates as mdates
+import subprocess
+import sys
 
-# 创建日志目录
-script_dir = os.path.dirname(os.path.abspath(__file__))
-base_dir = os.path.dirname(script_dir)
-log_dir = os.path.join(base_dir, "logs")
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-
-# 配置日志
-log_file = os.path.join(log_dir, f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
-    ]
-)
-logging.info("智慧校园仪表盘启动")
-
-# 确保导入json库
-# 用于Basic Authentication
-# 用于URL编码Topic
-# 用于MQTT通信
 try:
     from PIL import Image, ImageTk, UnidentifiedImageError
     PIL_AVAILABLE = True
@@ -53,34 +46,13 @@ except ImportError:
     PIL_AVAILABLE = False
     print("警告：Pillow库未安装或导入失败，视频/图像显示功能将不可用。请运行 'pip install Pillow' 进行安装。")
 
-import tkinter as tk
-from tkinter import ttk, messagebox, font as tkFont
-import paho.mqtt.client as mqtt
-import json
-import base64
-import io # Added io import
-from PIL import Image, ImageTk, UnidentifiedImageError
-from datetime import datetime, timedelta
-import time
-import threading
-import random
-from collections import deque
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib import dates as mdates
-import locale # Added locale import
-import socket # For network error handling in MQTT connect
-import requests
-
 # --- Matplotlib Imports ---
 try:
-    import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    import matplotlib.pyplot as plt # Added import for plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # Corrected indentation
     MATPLOTLIB_AVAILABLE = True
     plt.style.use('dark_background') # Apply dark theme to matplotlib charts
     # 解决中文显示问题
-    # 尝试使用 'PingFang SC'，如果找不到，尝试 'Heiti TC' 或其他macOS常见中文字体
-    # 确保字体名称与系统中安装的名称完全一致
     plt.rcParams['font.sans-serif'] = ['PingFang SC', 'Heiti TC', 'Arial Unicode MS', 'sans-serif']
     plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 except ImportError:
@@ -93,51 +65,102 @@ WEATHER_CITY_NAME = "Tianshui" # 天水
 WEATHER_API_URL = f"https://api.openweathermap.org/data/2.5/weather?q={WEATHER_CITY_NAME}&appid={WEATHER_API_KEY}&units=metric&lang=zh_cn"
 WEATHER_FETCH_INTERVAL = 1800 # 30 minutes in seconds (30 * 60)
 
+# --- Color Constants for UI ---
+TEXT_COLOR_DEFAULT = "#FFFFFF" # Default text color (assuming dark theme)
+TEXT_COLOR_STATUS_CONNECTED = "#4CAF50"  # Green for connected
+TEXT_COLOR_STATUS_ERROR = "#F44336"      # Red for errors/disconnected
+TEXT_COLOR_STATUS_WARNING = "#FFC107"    # Amber/Yellow for warnings/connecting
+TEXT_COLOR_STATUS_SIM = "#03A9F4"        # Blue for simulation mode
+TEXT_COLOR_INFO = "#2196F3"          # Blue for general info
+LABEL_TEXT_COLOR = "#E0E0E0"         # Light gray for labels
+VALUE_TEXT_COLOR = "#FFFFFF"         # White for values
+SECTION_TITLE_COLOR = "#4FC3F7"      # Light blue for section titles
+ACCENT_COLOR = "#4CAF50"  # Added from simple_working_dashboard.py for gauges
+
 # --- MQTT Configuration ---
 # 尝试加载配置文件
 try:
-    config_file = os.path.join(base_dir, "config", "config.json")
+    # Correct base_dir for config (should be project root of dashboard)
+    # __file__ is .../dashboard/src/core/app.py
+    # script_dir is .../dashboard/src/core
+    # src_dir is .../dashboard/src
+    # dashboard_dir is .../dashboard/
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.dirname(script_dir)
+    dashboard_dir = os.path.dirname(src_dir)
+    config_file = os.path.join(dashboard_dir, "config", "config.json")
+    print(f"DEBUG: Attempting to load config from: {config_file}") # DEBUG PRINT
+
+    MQTT_BROKER_HOST_DEFAULT = "192.168.1.129"
+    MQTT_BROKER_PORT_DEFAULT = 1883
+    MQTT_CLIENT_ID_DEFAULT = "smart_campus_dashboard_client_default"
+    MQTT_CAMERA_TOPIC_DEFAULT = "sc/camera/stream/default"
+    MQTT_WEATHER_TOPIC_DEFAULT = "sc/weather/data/default"
+    SIOT_SERVER_HTTP_DEFAULT = "http://192.168.1.129:8080"
+    SIOT_USERNAME_DEFAULT = "siot_default"
+    SIOT_PASSWORD_DEFAULT = "dfrobot_default"
+
     if os.path.exists(config_file):
-        with open(config_file, 'r') as f:
+        print(f"DEBUG: Config file found at: {config_file}") # DEBUG PRINT
+        with open(config_file, 'r', encoding='utf-8') as f: # Added encoding
             config = json.load(f)
-            # 读取配置
-            SIOT_SERVER_HTTP = config.get("siot_server_http", "http://192.168.1.129:8080")
-            SIOT_USERNAME = config.get("siot_username", "siot")
-            SIOT_PASSWORD = config.get("siot_password", "dfrobot")
-            MQTT_BROKER_HOST = config.get("mqtt_broker_host", "192.168.1.129")
-            MQTT_BROKER_PORT = config.get("mqtt_broker_port", 1883)
-            MQTT_CLIENT_ID = config.get("mqtt_client_id", "smart_campus_dashboard_client_001")
-            MQTT_CAMERA_TOPIC = config.get("mqtt_camera_topic", "sc/camera/stream")
-            MQTT_WEATHER_TOPIC = config.get("mqtt_weather_topic", "sc/weather/data")
-            logging.info("成功加载配置文件")
+            print(f"DEBUG: Config loaded: {config}") # DEBUG PRINT
+            
+            mqtt_config = config.get("mqtt", {})
+            SIOT_SERVER_HTTP = config.get("siot_server_http", SIOT_SERVER_HTTP_DEFAULT) # Assuming siot_server_http is top-level or adjust as needed
+            SIOT_USERNAME = config.get("siot_username", SIOT_USERNAME_DEFAULT) # Assuming siot_username is top-level or adjust as needed
+            SIOT_PASSWORD = config.get("siot_password", SIOT_PASSWORD_DEFAULT) # Assuming siot_password is top-level or adjust as needed
+
+            MQTT_BROKER_HOST = mqtt_config.get("broker_host", MQTT_BROKER_HOST_DEFAULT)
+            print(f"DEBUG: MQTT_BROKER_HOST from mqtt_config.get: {MQTT_BROKER_HOST}") # DEBUG PRINT
+            MQTT_BROKER_PORT = mqtt_config.get("broker_port", MQTT_BROKER_PORT_DEFAULT)
+            MQTT_CLIENT_ID = mqtt_config.get("client_id", MQTT_CLIENT_ID_DEFAULT)
+            
+            # Assuming camera_topic and weather_topic might be elsewhere or need defaults
+            # For now, let's assume they might be under a general 'topics' key or similar if not under 'mqtt'
+            # If they are meant to be top-level in config.json, adjust accordingly.
+            MQTT_CAMERA_TOPIC = config.get("mqtt_camera_topic", "siot/摄像头")
+            MQTT_WEATHER_TOPIC = config.get("mqtt_weather_topic", MQTT_WEATHER_TOPIC_DEFAULT)
+
+            logging.info(f"成功加载配置文件: {config_file}")
+            print(f"INFO: Successfully loaded config file: {config_file}") # DEBUG PRINT
+            print(f"INFO: MQTT_BROKER_HOST set to: {MQTT_BROKER_HOST}") # DEBUG PRINT
+            print(f"INFO: MQTT_BROKER_PORT set to: {MQTT_BROKER_PORT}") # DEBUG PRINT
+            print(f"INFO: MQTT_CLIENT_ID set to: {MQTT_CLIENT_ID}") # DEBUG PRINT
     else:
         logging.warning(f"配置文件不存在: {config_file}，使用默认配置")
-        SIOT_SERVER_HTTP = "http://192.168.1.129:8080"
-        SIOT_USERNAME = "siot"
-        SIOT_PASSWORD = "dfrobot"
-        MQTT_BROKER_HOST = "192.168.1.129"
-        MQTT_BROKER_PORT = 1883
-        MQTT_CLIENT_ID = "smart_campus_dashboard_client_001"
-        MQTT_CAMERA_TOPIC = "sc/camera/stream"
-        MQTT_WEATHER_TOPIC = "sc/weather/data"
+        print(f"WARNING: Config file NOT FOUND: {config_file}. Using default MQTT settings.") # DEBUG PRINT
+        SIOT_SERVER_HTTP = SIOT_SERVER_HTTP_DEFAULT
+        SIOT_USERNAME = SIOT_USERNAME_DEFAULT
+        SIOT_PASSWORD = SIOT_PASSWORD_DEFAULT
+        MQTT_BROKER_HOST = MQTT_BROKER_HOST_DEFAULT
+        MQTT_BROKER_PORT = MQTT_BROKER_PORT_DEFAULT
+        MQTT_CLIENT_ID = MQTT_CLIENT_ID_DEFAULT
+        MQTT_CAMERA_TOPIC = "siot/摄像头"
+        MQTT_WEATHER_TOPIC = MQTT_WEATHER_TOPIC_DEFAULT
+        print(f"INFO: MQTT_BROKER_HOST set to default: {MQTT_BROKER_HOST}") # DEBUG PRINT
 except Exception as e:
     logging.error(f"加载配置文件时出错: {e}，使用默认配置")
-    SIOT_SERVER_HTTP = "http://192.168.1.129:8080"
-    SIOT_USERNAME = "siot"
-    SIOT_PASSWORD = "dfrobot"
-    MQTT_BROKER_HOST = "192.168.1.129"
-    MQTT_BROKER_PORT = 1883
-    MQTT_CLIENT_ID = "smart_campus_dashboard_client_001"
-    MQTT_CAMERA_TOPIC = "sc/camera/stream"
-    MQTT_WEATHER_TOPIC = "sc/weather/data"
+    print(f"ERROR: Exception during config load: {e}. Using default MQTT settings.") # DEBUG PRINT
+    SIOT_SERVER_HTTP = SIOT_SERVER_HTTP_DEFAULT
+    SIOT_USERNAME = SIOT_USERNAME_DEFAULT
+    SIOT_PASSWORD = SIOT_PASSWORD_DEFAULT
+    MQTT_BROKER_HOST = MQTT_BROKER_HOST_DEFAULT
+    MQTT_BROKER_PORT = MQTT_BROKER_PORT_DEFAULT
+    MQTT_CLIENT_ID = MQTT_CLIENT_ID_DEFAULT
+    MQTT_CAMERA_TOPIC = "siot/摄像头"
+    MQTT_WEATHER_TOPIC = MQTT_WEATHER_TOPIC_DEFAULT
+    print(f"INFO: MQTT_BROKER_HOST set to default after exception: {MQTT_BROKER_HOST}") # DEBUG PRINT
 MQTT_TOPICS = [
     "siot/环境温度", "siot/环境湿度", "siot/aqi", "siot/tvoc", "siot/eco2",
-    "siot/紫外线指数", "siot/uv风险等级", "siot/噪音", MQTT_CAMERA_TOPIC, MQTT_WEATHER_TOPIC
+    "siot/紫外线指数", "siot/uv风险等级", "siot/噪音", "siot/摄像头", MQTT_WEATHER_TOPIC
 ]
 mqtt_data_cache = {topic: "--" for topic in MQTT_TOPICS} # 初始化缓存
 mqtt_data_cache[MQTT_CAMERA_TOPIC] = None # Initialize camera data as None
 # 使用指定的API版本来初始化客户端，以消除弃用警告
+print("DEBUG: Before mqtt.Client instantiation") # DEBUG PRINT
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+print("DEBUG: After mqtt.Client instantiation") # DEBUG PRINT
 
 # 模拟数据，在无法连接服务器时使用
 simulation_data = {
@@ -182,7 +205,7 @@ FONT_TIMESTAMP = ("Helvetica", 14, "bold") # Increased font size and made bold
 FONT_PANEL_ICON = ("Helvetica", 16) # New font for icons
 FONT_PANEL_TITLE = ("Helvetica", 14, "bold") # Adjusted for data item label
 FONT_PANEL_LABEL = ("Helvetica", 12) 
-FONT_PANEL_VALUE = ("Helvetica", 30, "bold")
+FONT_PANEL_VALUE = ("Helvetica",25, "bold")
 FONT_PANEL_UNIT = ("Helvetica", 12)
 FONT_AI_SECTION_TITLE = ("Helvetica", 16, "bold")
 FONT_AI_ADVICE = ("Helvetica", 12)
@@ -256,1490 +279,789 @@ panel_configs = {
     "uv": {"base_topic_name": "紫外线指数", "display_title": "紫外线指数", "unit": "", "icon": "☀️"},
     "noise": {"base_topic_name": "噪音", "display_title": "噪音", "unit": "dB", "icon": "🔊"},
 }
-# Order of panels in the grid - this might become dynamic or less relevant if left panel shows all
-# panel_order = ["eco2", "tvoc", "uv", "noise", "uvl"] # Original for reference
-
-# --- UI Creation Functions ---
-# create_header_section and create_main_layout will be moved into the class or refactored.
-# Global create_main_layout and update_camera_stream are removed from here.
+print("DEBUG: Global definitions complete, before class SmartCampusDashboard") # DEBUG PRINT
 
 class SmartCampusDashboard:
-    def __init__(self, root_window):
-        self.root = root_window
-        self.root.title(APP_TITLE) # Use constant
-        self.root.geometry("1200x800")
-        self.root.configure(bg=PAGE_BG_COLOR)
+    def __init__(self, root):
+        self.root = root # 将传入的root参数赋值给实例变量self.root
+        self.debug_mode = True # 初始化 debug_mode 属性
 
-        # Initialize instance variables for UI elements and data
-        self.time_var = tk.StringVar()
-        self.connection_status_var = tk.StringVar(value="MQTT状态: 初始化...")
-        self.sim_button_text_var = tk.StringVar(value="启用模拟数据")
+        # 确保在 __init__ 方法的早期（尤其是在调用 self.connect_mqtt() 之前）
+        # 初始化 mqtt_config, MQTT_BROKER_HOST, 和 MQTT_BROKER_PORT 实例变量。
+        # mqtt_config 应该是从JSON文件加载的全局配置字典。
+        self.mqtt_config = mqtt_config
+        self.MQTT_BROKER_HOST = self.mqtt_config.get('broker_host')
+        self.MQTT_BROKER_PORT = self.mqtt_config.get('broker_port')
+
+        # MQTT客户端初始化移到这里
+        client_id = self.mqtt_config.get('client_id', f"dashboard_client_{random.randint(0, 10000)}")
+        self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
+
+        if hasattr(self, 'debug_mode') and self.debug_mode: # Check if debug_mode is set
+            print("DEBUG: SmartCampusDashboard __init__ - ENTER")
+        else:
+            # Fallback or ensure debug_mode is initialized if this message is critical
+            print("DEBUG: SmartCampusDashboard __init__ - ENTER (debug_mode might not be initialized yet)")
         
-        self.panel_configs = panel_configs # Initialize self.panel_configs from global
-        self.MQTT_TOPICS = MQTT_TOPICS # Initialize self.MQTT_TOPICS from global
-        self.MQTT_CAMERA_TOPIC = MQTT_CAMERA_TOPIC # Initialize self.MQTT_CAMERA_TOPIC from global
-        self.MQTT_WEATHER_TOPIC = MQTT_WEATHER_TOPIC # Initialize self.MQTT_WEATHER_TOPIC from global
-
-        # MQTT连接相关变量
-        self._mqtt_reconnect_thread = None
-        self._mqtt_client = None
-        self._reconnect_attempts = 0
+        # Initialize MQTT connection state attributes
         self._mqtt_connected = False
+        self._reconnect_attempts = 0
+        self._mqtt_reconnect_thread = None
+
+        # Initialize StringVars for UI elements that need dynamic text
+        self.time_var = tk.StringVar()
+        self.time_var.set("正在加载时间...")
+
+        self.connection_status_var = tk.StringVar() # For connection status text
+        self.connection_status_var.set("状态: 未连接") # Initial status
+
+        self.sim_button_text_var = tk.StringVar()
+        self.sim_button_text_var.set("启用模拟数据")
+
+        # Initialize data_vars for sensor readings
+        self.data_vars = {} # Will store StringVars for each sensor panel
+
+        # Initialize last data received time
         self.last_data_received_time = None
-        self.debug_mode = True  # 启用调试模式，显示更详细的连接信息
+        self.last_video_frame_time = None
+        self.video_frames_received = 0
 
-        self.data_vars = {key: tk.StringVar(value="--") for key in self.panel_configs.keys()}
-        self.sensor_data_history = {key: deque(maxlen=CHART_HISTORY_MAXLEN) for key in self.panel_configs.keys() if not self.panel_configs[key].get("is_weather_metric", False) and not self.panel_configs[key].get("is_status_metric", False)}
-        
-        self.weather_data = {} # To store fetched weather data
-        self.weather_error = None # To store any error during weather fetch
-
-        self.ai_advice_text_widget = None
-        self.connection_status_label_widget = None
-        self.sim_button_widget = None
-        self.camera_image_label = None 
-        self.video_photo_image = None # Keep a reference to the PhotoImage
-
-        self.use_simulation = False
-        self._debug_video_update_counter = 0 # For debugging video updates
-        self.video_frames_received = 0 # 视频帧计数器
-        self.last_video_frame_time = None # 最后接收到视频帧的时间
-        self.last_data_received_time = None # 追踪最后一次数据接收时间
-        self.last_chart_update = datetime.now() # 追踪最后一次图表更新时间
-
-        # Chart related (placeholders if Matplotlib not available)
-        self.charts = {} # To store chart objects (Figure, Axes, Canvas)
-        # 修改数据结构，存储(timestamp, value)元组，用于时间序列图表
+        # Initialize chart data history
         self.chart_data_history = {
-            'temperature': deque(maxlen=CHART_HISTORY_MAXLEN),
-            'humidity': deque(maxlen=CHART_HISTORY_MAXLEN),
-            'noise': deque(maxlen=CHART_HISTORY_MAXLEN)
+            "temp": deque(maxlen=CHART_HISTORY_MAXLEN),
+            "humi": deque(maxlen=CHART_HISTORY_MAXLEN),
+            "noise": deque(maxlen=CHART_HISTORY_MAXLEN)
         }
+        self.last_chart_update = time.time() # Initialize last chart update time
 
-        self.setup_ui_layout()
-        self.setup_charts() # Call chart setup
+        # Gauge canvases - initialized to None
+        self.gauge_aqi_canvas = None
+        # self.gauge_eco2_canvas = None # Renamed
+        self.gauge_uv_risk_canvas = None # Added for clarity
+
+        # Chart figures, axes, and canvas widgets - initialized to None
+        self.fig_temp_chart = None
+        self.ax_temp_chart = None
+        self.chart_canvas_widget_temp = None
+        self.fig_humi_chart = None
+        self.ax_humi_chart = None
+        self.chart_canvas_widget_humi = None
+        self.fig_noise_chart = None
+        self.ax_noise_chart = None
+        self.chart_canvas_widget_noise = None
+
+
+        # Initialize panel_configs (moved from global to instance variable)
+        self.panel_configs = {
+            "temp": {"display_title": "环境温度", "unit": "°C", "icon": "🌡️", "base_topic_name": "siot/环境温度", "data_type": "numeric", "chartable": True},
+            "humi": {"display_title": "环境湿度", "unit": "%RH", "icon": "💧", "base_topic_name": "siot/环境湿度", "data_type": "numeric", "chartable": True},
+            "aqi": {"display_title": "空气质量指数", "unit": "级", "icon": "💨", "base_topic_name": "siot/aqi", "data_type": "numeric_level", "gauge_max": 5, "gauge": True, "levels": ["非常好", "好", "一般", "差", "极差"]},
+            "tvoc": {"display_title": "TVOC", "unit": "ppb", "icon": "🌿", "base_topic_name": "siot/tvoc", "data_type": "numeric"},
+            "eco2": {"display_title": "eCO2", "unit": "ppm", "icon": "☁️", "base_topic_name": "siot/eco2", "data_type": "numeric", "gauge_max": 2000, "gauge": False},
+            "uv_index": {"display_title": "紫外线指数", "unit": "", "icon": "☀️", "base_topic_name": "siot/紫外线指数", "data_type": "numeric"},
+            "uv_risk": {"display_title": "UV风险等级", "unit": "级", "icon": "⚠️", "base_topic_name": "siot/uv风险等级", "data_type": "string_level", "gauge_max": 4, "gauge": True, "levels": ["低", "中", "高", "很高", "极高"]},
+            "noise": {"display_title": "噪音水平", "unit": "dB", "icon": "🔊", "base_topic_name": "siot/噪音", "data_type": "numeric", "chartable": True},
+            "weather": {"display_title": "天气状况", "unit": "", "icon": "🌦️", "base_topic_name": "weather/data", "data_type": "weather_info"},
+        }
+        # Populate self.data_vars based on panel_configs
+        for key, config in self.panel_configs.items():
+            self.data_vars[key] = tk.StringVar(value="--")
         
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        
-        # Initialize MQTT client
-        self.mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2, client_id=MQTT_CLIENT_ID, clean_session=True)
-        self.mqtt_client.on_connect = self.on_connect
-        self.mqtt_client.on_message = self.on_message
-        self.mqtt_client.on_disconnect = self.on_disconnect
-        self.mqtt_client.username_pw_set(SIOT_USERNAME, SIOT_PASSWORD)
+        self.video_photo_image = None # To store the PhotoImage object for the video frame
+
+        # Initialize use_simulation 实例变量
+        self.use_simulation = False # 默认不使用模拟数据
+
+        # --- UI Style Configuration ---
+        self.style = ttk.Style()
+        # Define styles for connection status label
+        self.style.configure("Status.TLabel", padding=2, font=FONT_STATUS, background=PAGE_BG_COLOR) # Base style
+        self.style.configure("Status.Connected.TLabel", foreground=TEXT_COLOR_STATUS_CONNECTED, font=FONT_STATUS, background=PAGE_BG_COLOR)
+        self.style.configure("Status.Error.TLabel", foreground=TEXT_COLOR_STATUS_ERROR, font=FONT_STATUS, background=PAGE_BG_COLOR)
+        self.style.configure("Status.Warning.TLabel", foreground=TEXT_COLOR_STATUS_WARNING, font=FONT_STATUS, background=PAGE_BG_COLOR)
+        self.style.configure("Status.Sim.TLabel", foreground=TEXT_COLOR_STATUS_SIM, font=FONT_STATUS, background=PAGE_BG_COLOR)
+        self.style.configure("Status.Default.TLabel", foreground=TEXT_COLOR_DEFAULT, font=FONT_STATUS, background=PAGE_BG_COLOR)
+
+
+        self.setup_ui() 
+        # Ensure gauges are drawn initially after UI setup and canvas creation
+        self.root.after(250, self.initial_gauge_draw) # Increased delay slightly
 
         self.connect_mqtt()
-        self.update_time_display() # Start the clock
-        self.fetch_weather_data_periodic() # Start periodic weather fetching
-        self.check_system_status() # Start periodic system status checks
+        self.start_weather_updates()
+        self.start_time_updates()
+        self.start_system_status_check()
         
-        # 启动内存清理定时任务（首次在启动后10分钟执行）
-        self.root.after(10 * 60 * 1000, self.clean_memory)  
+        print("DEBUG: SmartCampusDashboard __init__ - EXIT") # ADDED
 
-        print("DEBUG: SmartCampusDashboard initialized")
+    def update_connection_status_display(self, connected, status_text=None):
+        """更新MQTT连接状态显示"""
+        try:
+            self._mqtt_connected = connected
+            current_style = "Status.Default.TLabel"
+            
+            if connected:
+                status_msg = "状态: 已连接到MQTT服务器"
+                current_style = "Status.Connected.TLabel"
+                logging.info(status_msg)
+            else:
+                if status_text:
+                    status_msg = status_text
+                else:
+                    status_msg = "状态: 连接已断开" # Default disconnected message
+                current_style = "Status.Error.TLabel"
+                logging.warning(status_msg)
+            
+            # Schedule the UI update to run in the main thread
+            def _update():
+                if hasattr(self, 'connection_status_var'):
+                    self.connection_status_var.set(status_msg)
+                
+                if hasattr(self, 'connection_status_label_widget') and self.connection_status_label_widget:
+                    # The text is already handled by textvariable, so just configure style
+                    self.connection_status_label_widget.configure(style=current_style)
+            
+            if self.root: # Ensure root window exists
+                 self.root.after(0, _update)
 
-    def create_main_layout(self, parent):
-        print("DEBUG: self.create_main_layout called")
+        except Exception as e:
+            logging.error(f"更新连接状态显示时出错: {e}")
 
-        main_regions_frame = tk.Frame(parent, bg=PAGE_BG_COLOR)
-        main_regions_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # 重新调整布局比例：左侧数据面板2，中间视频区域3，右侧图表区域8
-        # 进一步减小左侧区域宽度，增加右侧图表区域宽度，使图表显示更清晰
-        main_regions_frame.grid_columnconfigure(0, weight=2) # 左侧数据面板
-        main_regions_frame.grid_columnconfigure(1, weight=3, minsize=300) # 中间视频区域，适当增加宽度
-        main_regions_frame.grid_columnconfigure(2, weight=8) # 右侧图表区域，进一步增加宽度比例
-        main_regions_frame.grid_rowconfigure(0, weight=1)
+    def setup_ui(self):
+        print("DEBUG: SmartCampusDashboard setup_ui - ENTER")
+        self.root.title(APP_TITLE)
+        self.root.geometry("1440x900")  # Increased size for three columns
+        self.root.configure(bg=PAGE_BG_COLOR)
 
-        # --- Left Region (Data Panels) ---
-        left_region_frame = tk.Frame(main_regions_frame, bg=PAGE_BG_COLOR, padx=5, pady=5)
-        left_region_frame.grid(row=0, column=0, sticky="nsew", padx=(0,5))
+        # --- Main Application Frame ---
+        app_frame = ttk.Frame(self.root, style='App.TFrame')
+        app_frame.pack(expand=True, fill=tk.BOTH)
+        self.style.configure('App.TFrame', background=PAGE_BG_COLOR)
+
+        # --- Top Bar (Title, Time, Status) ---
+        top_bar_frame = ttk.Frame(app_frame, style='TopBar.TFrame', padding=(10,5))
+        top_bar_frame.pack(fill=tk.X)
+        self.style.configure('TopBar.TFrame', background=PAGE_BG_COLOR) # Darker background for top bar
+
+        # Configure columns for centering title
+        top_bar_frame.columnconfigure(0, weight=1) # Left spacer
+        top_bar_frame.columnconfigure(1, weight=0) # Title (no extra space)
+        top_bar_frame.columnconfigure(2, weight=1) # Right spacer (contains time and status)
+
+        title_label = ttk.Label(top_bar_frame, text=APP_TITLE, font=FONT_APP_TITLE, style='Title.TLabel')
+        title_label.grid(row=0, column=1, sticky="ew") # Place in middle column
+        self.style.configure('Title.TLabel', background=PAGE_BG_COLOR, foreground=TEXT_COLOR_HEADER)
+
+        # Frame for time and status on the right
+        time_status_frame = ttk.Frame(top_bar_frame, style='TopBar.TFrame')
+        time_status_frame.grid(row=0, column=2, sticky="e") # Align to the east (right)
+
+        self.connection_status_label_widget = ttk.Label(time_status_frame, textvariable=self.connection_status_var, style="Status.Default.TLabel")
+        self.connection_status_label_widget.pack(side=tk.RIGHT, padx=(0,10), pady=5) # Add some padding to the right of status
         
-        data_panels_container = tk.Frame(left_region_frame, bg=PAGE_BG_COLOR)
-        data_panels_container.pack(expand=False, fill='x', anchor='n')
+        time_label = ttk.Label(time_status_frame, textvariable=self.time_var, font=FONT_TIMESTAMP, style='Time.TLabel')
+        time_label.pack(side=tk.RIGHT, padx=10, pady=5)
+        self.style.configure('Time.TLabel', background=PAGE_BG_COLOR, foreground=TEXT_COLOR_HEADER)
+        self.update_connection_status_display(self._mqtt_connected)
+
+        # --- Main Content Area (Three Columns) ---
+        content_area_frame = ttk.Frame(app_frame, style='ContentArea.TFrame', padding=10)
+        content_area_frame.pack(expand=True, fill=tk.BOTH)
+        self.style.configure('ContentArea.TFrame', background=PAGE_BG_COLOR)
+
+        # Configure columns to have a 3:4:3 ratio for resizing (Left:Middle:Right)
+        content_area_frame.columnconfigure(0, weight=3) # Left column
+        content_area_frame.columnconfigure(1, weight=4) # Middle column
+        content_area_frame.columnconfigure(2, weight=3) # Right column
+        content_area_frame.rowconfigure(0, weight=1)    # Allow row to expand
+
+        # --- Left Column: Sensor Data Panels ---
+        left_column_frame = ttk.Frame(content_area_frame, style='Column.TFrame', padding=5)
+        left_column_frame.grid(row=0, column=0, sticky="nsew", padx=(0,5))
+        self.style.configure('Column.TFrame', background=PANEL_BG_COLOR) # Slightly lighter for column background
+
+        # --- Middle Column: Video, Gauges, AI ---
+        middle_column_frame = ttk.Frame(content_area_frame, style='Column.TFrame', padding=5)
+        middle_column_frame.grid(row=0, column=1, sticky="nsew", padx=5)
         
-        # left_panel_keys = list(self.panel_configs.keys())
-        left_panel_keys = list(self.panel_configs.keys())
+        # --- Right Column: Charts ---
+        right_column_frame = ttk.Frame(content_area_frame, style='Column.TFrame', padding=5)
+        right_column_frame.grid(row=0, column=2, sticky="nsew", padx=(5,0))
+
+        # Populate Left Column (Sensor Panels)
+        self.populate_left_column(left_column_frame)
+
+        # Populate Middle Column (Video, Gauges, AI)
+        self.populate_middle_column(middle_column_frame)
+
+        # Populate Right Column (Charts)
+        self.populate_right_column(right_column_frame)
         
-        for key in left_panel_keys:
-            # if key not in self.panel_configs:
+        # Add a bottom status bar for version and simulation button
+        bottom_bar_frame = ttk.Frame(app_frame, style='BottomBar.TFrame', padding=(10,5))
+        bottom_bar_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        self.style.configure('BottomBar.TFrame', background=PAGE_BG_COLOR)
+
+        version_label = ttk.Label(bottom_bar_frame, text=APP_VERSION, font=FONT_STATUS, style='Version.TLabel')
+        version_label.pack(side=tk.LEFT, padx=10)
+        self.style.configure('Version.TLabel', background=PAGE_BG_COLOR, foreground=TEXT_COLOR_VERSION)
+
+        self.sim_button_widget = ttk.Button(bottom_bar_frame, textvariable=self.sim_button_text_var, command=self.toggle_simulation_mode, style='Sim.TButton')
+        self.sim_button_widget.pack(side=tk.RIGHT, padx=10) # Added pack for the button
+
+    def populate_left_column(self, parent_frame):
+        """Populates the left column with sensor data panels."""
+        if self.debug_mode: print("DEBUG: populate_left_column - ENTER")
+        parent_frame.columnconfigure(0, weight=1)
+
+        left_panel_order = ["weather", "eco2", "tvoc", "uv_index", "noise"]
+
+        for i, key in enumerate(left_panel_order):
             if key not in self.panel_configs:
-                print(f"警告: left_panel_keys 中的键 '{key}' 在 self.panel_configs 中未找到。")
+                logging.warning(f"populate_left_column: Key '{key}' not found in panel_configs. Skipping.")
+                if self.debug_mode: print(f"DEBUG: populate_left_column - Key '{key}' not in panel_configs.")
                 continue
             
-            # config = self.panel_configs[key]
             config = self.panel_configs[key]
-            display_title = config.get("display_title", key.capitalize())
-            unit = config.get("unit", "")
-            icon_char = config.get("icon", "")
-        
-            panel_frame = tk.Frame(data_panels_container, bg=PANEL_BG_COLOR, pady=5, padx=10,
-                                   highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-            panel_frame.pack(fill="x", pady=3, padx=5)
-        
-            # 优化面板内部布局，使其更加美观
-            content_row_frame = tk.Frame(panel_frame, bg=PANEL_BG_COLOR)
-            content_row_frame.pack(fill="x")
+            # Increased internal padding and pady for grid
+            panel_frame = ttk.Frame(parent_frame, style='DataPanel.TFrame', relief=tk.RIDGE, borderwidth=1, padding=(8,5))
+            panel_frame.grid(row=i, column=0, sticky="new", pady=4, padx=5) # Increased pady
+            parent_frame.rowconfigure(i, weight=0)
+
+            self.style.configure('DataPanel.TFrame', background=PANEL_BG_COLOR)
+
+            panel_frame.columnconfigure(0, weight=0) # Icon
+            panel_frame.columnconfigure(1, weight=1) # Text content
+
+            icon_label = ttk.Label(panel_frame, text=config.get("icon", " "), font=FONT_PANEL_ICON, style='PanelIcon.TLabel')
+            # Adjusted rowspan for weather, sticky "n", more padx, pady for weather icon
+            icon_label.grid(row=0, column=0, rowspan=3 if key == "weather" else 1, sticky="n", padx=(0, 8), pady=(5 if key == "weather" else 2))
+            self.style.configure('PanelIcon.TLabel', background=PANEL_BG_COLOR, foreground=TEXT_COLOR_PANEL_TITLE)
             
-            # 左侧容器：图标和标题
-            left_container = tk.Frame(content_row_frame, bg=PANEL_BG_COLOR)
-            left_container.pack(side="left", padx=5)
-            
-            # 将标题和图标组合在一起，保持统一对齐
-            if icon_char:
-                icon_label = tk.Label(left_container, text=icon_char, font=FONT_PANEL_ICON, fg=TEXT_COLOR_PANEL_TITLE, bg=PANEL_BG_COLOR)
-                icon_label.pack(side="left", padx=(0, 5))
-            
-            title_label = tk.Label(left_container, text=display_title + ":", font=FONT_PANEL_LABEL, fg=TEXT_COLOR_PANEL_TITLE, bg=PANEL_BG_COLOR)
-            title_label.pack(side="left", padx=(0, 5))
-            
-            # 右侧容器：数值和单位
-            value_unit_frame = tk.Frame(content_row_frame, bg=PANEL_BG_COLOR)
-            value_unit_frame.pack(side="right", padx=8)  # 增加右侧padding，使数值显示更美观
-            
-            if key in self.data_vars and self.data_vars[key] is not None:
-                value_label = tk.Label(value_unit_frame, textvariable=self.data_vars[key], font=FONT_PANEL_VALUE, 
-                                      fg=TEXT_COLOR_VALUE, bg=PANEL_BG_COLOR, width=5, anchor="e")  # 固定宽度，右对齐
-                value_label.pack(side="left", anchor="s")
-            else:
-                tk.Label(value_unit_frame, text="--", font=FONT_PANEL_VALUE, fg="red", bg=PANEL_BG_COLOR, 
-                        width=5, anchor="e").pack(side="left", anchor="s")  # 固定宽度，右对齐
-                print(f"DEBUG: self.data_vars missing or None for key: {key} in create_main_layout")
-            
-            # 确保单位始终显示
-            if unit:
-                unit_label = tk.Label(value_unit_frame, text=unit, font=FONT_PANEL_UNIT, fg=TEXT_COLOR_UNIT, bg=PANEL_BG_COLOR)
-                unit_label.pack(side="left", anchor="s", padx=(3, 0), pady=(0, 3))
+            text_content_frame = ttk.Frame(panel_frame, style='PanelText.TFrame')
+            text_content_frame.grid(row=0, column=1, sticky="new") # Changed sticky to new
+            self.style.configure('PanelText.TFrame', background=PANEL_BG_COLOR)
+
+            if key == "weather":
+                text_content_frame.columnconfigure(0, weight=1) # Allow weather section to expand
+
+                title_label = ttk.Label(text_content_frame, text=f"{config.get('display_title', key)}", font=FONT_PANEL_LABEL, style='PanelTitleSmall.TLabel')
+                title_label.grid(row=0, column=0, sticky='w', pady=(0,3)) # Title for weather section
                 
-                # 保存单位标签的引用，以便在后续更新中使用
-                if not hasattr(self, 'unit_labels'):
-                    self.unit_labels = {}
-                self.unit_labels[key] = unit_label
-                
-        # --- Version, Simulation Button, and Connection Status (REMOVED from Bottom of Left Region) ---
-        # The following block has been removed as these elements are moved to the header:
-        # bottom_info_frame = tk.Frame(left_region_frame, bg=PAGE_BG_COLOR)
-        # bottom_info_frame.pack(side=tk.BOTTOM, fill="x", pady=(10,0), padx=5)
-        # version_label = tk.Label(bottom_info_frame, text=f"版本: {APP_VERSION}", font=FONT_STATUS, fg=TEXT_COLOR_VERSION, bg=PAGE_BG_COLOR, bd=0)
-        # version_label.pack(side="left", padx=(5, 5))
-        # self.sim_button_widget = tk.Button(bottom_info_frame, textvariable=self.sim_button_text_var, font=FONT_STATUS, fg=TEXT_COLOR_STATUS_SIM, bg=PANEL_BG_COLOR,
-        #                               activebackground=PANEL_BG_COLOR, bd=0, highlightthickness=0, command=self.toggle_simulation)
-        # self.sim_button_widget.pack(side="left", padx=5, pady=5)
-        # self.connection_status_label_widget = tk.Label(bottom_info_frame, textvariable=self.connection_status_var, font=FONT_STATUS, fg=TEXT_COLOR_STATUS_FAIL, bg=PAGE_BG_COLOR)
-        # self.connection_status_label_widget.pack(side="right", padx=(5, 5))
+                if "weather_temp" not in self.data_vars: self.data_vars["weather_temp"] = tk.StringVar(value="--")
+                if "weather_wind" not in self.data_vars: self.data_vars["weather_wind"] = tk.StringVar(value="--")
+                if "weather_humidity" not in self.data_vars: self.data_vars["weather_humidity"] = tk.StringVar(value="--")
 
-        # --- Middle Region (Video Top, Gauges Middle, AI Bottom) ---
-        middle_region_frame = tk.Frame(main_regions_frame, bg=PAGE_BG_COLOR, padx=5, pady=5)
-        middle_region_frame.grid(row=0, column=1, sticky="nsew", padx=5)
-        middle_region_frame.grid_rowconfigure(0, weight=5)  # 视频区域更大
-        middle_region_frame.grid_rowconfigure(1, weight=2)  # 仪表盘区域
-        middle_region_frame.grid_rowconfigure(2, weight=1)  # AI建议区域
-        middle_region_frame.grid_columnconfigure(0, weight=1)
-        
-        video_outer_frame = tk.Frame(middle_region_frame, bg=PANEL_BG_COLOR,
-                          highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-        video_outer_frame.grid(row=0, column=0, sticky="nsew", pady=(0,5))
-        
-        # 视频区域标题栏
-        video_title_frame = tk.Frame(video_outer_frame, bg=PANEL_BG_COLOR)
-        video_title_frame.pack(fill="x", anchor="nw", padx=10, pady=5)
-        
-        # 左侧标题
-        tk.Label(video_title_frame, text="实时监控视频", font=FONT_PANEL_TITLE, 
-                fg=TEXT_COLOR_PANEL_TITLE, bg=PANEL_BG_COLOR).pack(side=tk.LEFT)
-        
-        # 右侧状态指示器（用于显示视频帧接收状态）
-        self.video_status_var = tk.StringVar(value="等待视频流...")
-        self.video_status_label = tk.Label(video_title_frame, textvariable=self.video_status_var,
-                                          font=("Helvetica", 9), fg=TEXT_COLOR_STATUS_FAIL, bg=PANEL_BG_COLOR)
-        self.video_status_label.pack(side=tk.RIGHT, padx=5)
-        
-        # 创建一个内部框架来容纳视频画面，设置更大的最小尺寸确保视频区域足够大
-        video_inner_frame = tk.Frame(video_outer_frame, bg=PANEL_BG_COLOR, width=450, height=340)
-        video_inner_frame.pack(expand=True, fill="both", padx=10, pady=10)
-        video_inner_frame.pack_propagate(False)  # 防止内部控件改变框架大小
-        
-        # 视频显示区域增加边框
-        video_display_frame = tk.Frame(video_inner_frame, bg="#1a1a1a", bd=2, relief=tk.SUNKEN)
-        video_display_frame.pack(expand=True, fill="both", padx=5, pady=5)
-        
-        # 使用深色背景创建视频标签，改善视觉效果，优化显示
-        self.camera_image_label = tk.Label(video_display_frame, bg="#000000", 
-                                         text="等待视频流...", fg="#888888", font=("Helvetica", 14),
-                                         borderwidth=0, highlightthickness=0)  # 移除边框，使视频显示更干净
-        self.camera_image_label.pack(expand=True, fill="both", padx=2, pady=2)  # 添加适当的内边距
+                # Temperature
+                temp_frame = ttk.Frame(text_content_frame, style='PanelText.TFrame')
+                temp_frame.grid(row=1, column=0, sticky='ew', pady=1)
+                ttk.Label(temp_frame, text="温度:", font=FONT_PANEL_LABEL, style='PanelTitleSmall.TLabel').pack(side=tk.LEFT, padx=(0,2))
+                ttk.Label(temp_frame, textvariable=self.data_vars["weather_temp"], font=FONT_PANEL_VALUE, style='PanelValueSmall.TLabel').pack(side=tk.LEFT, padx=(0,2))
+                ttk.Label(temp_frame, text="°C", font=FONT_PANEL_UNIT, style='PanelUnit.TLabel').pack(side=tk.LEFT)
 
-        # 创建仪表盘区域 - 放在视频下面
-        gauge_frame = tk.Frame(middle_region_frame, bg=PANEL_BG_COLOR,
-                              highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-        gauge_frame.grid(row=1, column=0, sticky="nsew", pady=(5,0))
-        
-        # 分成左右两个区域，左侧AQI仪表盘，右侧UV风险等级仪表盘
-        gauge_frame.grid_columnconfigure(0, weight=1)
-        gauge_frame.grid_columnconfigure(1, weight=1)
-        
-        # --- AQI仪表盘 ---
-        aqi_frame = tk.Frame(gauge_frame, bg=PANEL_BG_COLOR, padx=10, pady=5)
-        aqi_frame.grid(row=0, column=0, sticky="nsew", padx=(5,2), pady=5)
-        
-        # AQI标题
-        tk.Label(aqi_frame, text="空气质量指数 (AQI)", font=FONT_PANEL_TITLE, 
-                fg=TEXT_COLOR_PANEL_TITLE, bg=PANEL_BG_COLOR).pack(anchor="n", pady=(5,10))
-        
-        # AQI值显示 - 增强视觉效果
-        aqi_display_frame = tk.Frame(aqi_frame, bg=PANEL_BG_COLOR)
-        aqi_display_frame.pack(fill="x", pady=5)
-        
-        # 左侧放置圆形指示器
-        self.aqi_indicator_canvas = tk.Canvas(aqi_display_frame, width=50, height=50, 
-                                           bg=PANEL_BG_COLOR, highlightthickness=0)
-        self.aqi_indicator_canvas.pack(side=tk.LEFT, padx=(20, 0))
-        
-        # 右侧放置值和等级
-        aqi_value_frame = tk.Frame(aqi_display_frame, bg=PANEL_BG_COLOR)
-        aqi_value_frame.pack(side=tk.LEFT, expand=True, fill="x", padx=15)
-        
-        # 创建AQI值的标签 - 更大字体
-        self.aqi_value_label = tk.Label(aqi_value_frame, text="--", font=("Helvetica", 28, "bold"), 
-                                      fg="#4CAF50", bg=PANEL_BG_COLOR)
-        self.aqi_value_label.pack(anchor="center")
-        
-        # AQI等级 - 更醒目
-        self.aqi_level_label = tk.Label(aqi_value_frame, text="--", font=("Helvetica", 14), 
-                                       fg=TEXT_COLOR_VALUE, bg=PANEL_BG_COLOR)
-        self.aqi_level_label.pack(anchor="center", pady=2)
-        
-        # AQI描述标签 - 添加详细说明
-        self.aqi_desc_label = tk.Label(aqi_frame, text="--", font=("Helvetica", 10), 
-                                     fg=TEXT_COLOR_VALUE, bg=PANEL_BG_COLOR, wraplength=180)
-        self.aqi_desc_label.pack(anchor="center", pady=(5, 10), fill="x")
-        
-        # --- UV风险等级仪表盘 ---
-        uv_frame = tk.Frame(gauge_frame, bg=PANEL_BG_COLOR, padx=10, pady=5)
-        uv_frame.grid(row=0, column=1, sticky="nsew", padx=(2,5), pady=5)
-        
-        # UV标题
-        tk.Label(uv_frame, text="紫外线风险等级", font=FONT_PANEL_TITLE, 
-                fg=TEXT_COLOR_PANEL_TITLE, bg=PANEL_BG_COLOR).pack(anchor="n", pady=(5,10))
-        
-        # UV值显示区域
-        uv_display_frame = tk.Frame(uv_frame, bg=PANEL_BG_COLOR)
-        uv_display_frame.pack(fill="x", pady=5)
-        
-        # UV值和等级显示
-        uv_value_frame = tk.Frame(uv_display_frame, bg=PANEL_BG_COLOR)
-        uv_value_frame.pack(side=tk.TOP, fill="x", pady=5)
-        
-        # 创建UV值的标签 - 更大字体
-        self.uv_value_label = tk.Label(uv_value_frame, text="--", font=("Helvetica", 28, "bold"), 
-                                      fg="#FFA500", bg=PANEL_BG_COLOR)
-        self.uv_value_label.pack(anchor="center")
-        
-        # UV等级 - 更醒目
-        self.uv_level_label = tk.Label(uv_value_frame, text="--", font=("Helvetica", 14), 
-                                      fg=TEXT_COLOR_VALUE, bg=PANEL_BG_COLOR)
-        self.uv_level_label.pack(anchor="center", pady=2)
-        
-        # 创建UV进度条指示器
-        self.uv_indicator_canvas = tk.Canvas(uv_frame, width=200, height=40, 
-                                          bg=PANEL_BG_COLOR, highlightthickness=0)
-        self.uv_indicator_canvas.pack(side=tk.TOP, fill="x", padx=10, pady=5)
-        
-        # UV描述标签 - 添加详细说明
-        self.uv_desc_label = tk.Label(uv_frame, text="--", font=("Helvetica", 10), 
-                                     fg=TEXT_COLOR_VALUE, bg=PANEL_BG_COLOR, wraplength=180)
-        self.uv_desc_label.pack(anchor="center", pady=(5, 10), fill="x")
+                # Wind
+                wind_frame = ttk.Frame(text_content_frame, style='PanelText.TFrame')
+                wind_frame.grid(row=2, column=0, sticky='ew', pady=1)
+                ttk.Label(wind_frame, text="风速:", font=FONT_PANEL_LABEL, style='PanelTitleSmall.TLabel').pack(side=tk.LEFT, padx=(0,2))
+                ttk.Label(wind_frame, textvariable=self.data_vars["weather_wind"], font=FONT_PANEL_VALUE, style='PanelValueSmall.TLabel').pack(side=tk.LEFT, padx=(0,2))
+                ttk.Label(wind_frame, text="m/s", font=FONT_PANEL_UNIT, style='PanelUnit.TLabel').pack(side=tk.LEFT)
 
-        # 创建AI建议区域
-        ai_advice_frame = tk.Frame(middle_region_frame, bg=PANEL_BG_COLOR, pady=5, padx=10,
-                                   highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-        ai_advice_frame.grid(row=2, column=0, sticky="nsew", pady=(5,0))
+                # Humidity
+                humi_frame = ttk.Frame(text_content_frame, style='PanelText.TFrame')
+                humi_frame.grid(row=3, column=0, sticky='ew', pady=1)
+                ttk.Label(humi_frame, text="湿度:", font=FONT_PANEL_LABEL, style='PanelTitleSmall.TLabel').pack(side=tk.LEFT, padx=(0,2))
+                ttk.Label(humi_frame, textvariable=self.data_vars["weather_humidity"], font=FONT_PANEL_VALUE, style='PanelValueSmall.TLabel').pack(side=tk.LEFT, padx=(0,2))
+                ttk.Label(humi_frame, text="%RH", font=FONT_PANEL_UNIT, style='PanelUnit.TLabel').pack(side=tk.LEFT)
+            else: # Non-weather items
+                # Using a frame to group label, value, unit for better control with pack
+                item_frame = ttk.Frame(text_content_frame, style='PanelText.TFrame')
+                item_frame.pack(fill=tk.X, anchor='w') # Fill horizontally, anchor west
 
-        tk.Label(ai_advice_frame, text="AI建议", font=FONT_AI_SECTION_TITLE, fg=TEXT_COLOR_AI_TITLE, bg=PANEL_BG_COLOR).pack(anchor="nw", padx=10, pady=5)
+                title_str = config.get("display_title", key)
+                title_label = ttk.Label(item_frame, text=f"{title_str}:", font=FONT_PANEL_LABEL, style='PanelTitleSmall.TLabel')
+                title_label.pack(side=tk.LEFT, padx=(0,5))
+                self.style.configure('PanelTitleSmall.TLabel', background=PANEL_BG_COLOR, foreground=TEXT_COLOR_PANEL_TITLE)
 
-        self.ai_advice_text_widget = tk.Text(ai_advice_frame, height=4, wrap=tk.WORD, bg=PANEL_BG_COLOR, fg=TEXT_COLOR_AI_ADVICE,
-                                 font=FONT_AI_ADVICE, bd=0, highlightthickness=0)
-        self.ai_advice_text_widget.pack(expand=True, fill="both", padx=10, pady=(0,5))
-        self.ai_advice_text_widget.insert(tk.END, "欢迎使用智慧校园环境监测系统")
+                value_label = ttk.Label(item_frame, textvariable=self.data_vars[key], font=FONT_PANEL_VALUE, style='PanelValueSmall.TLabel')
+                value_label.pack(side=tk.LEFT, padx=(0,5))
+                self.style.configure('PanelValueSmall.TLabel', background=PANEL_BG_COLOR, foreground=TEXT_COLOR_VALUE)
+
+                unit_str = config.get("unit", "")
+                if unit_str:
+                    unit_label = ttk.Label(item_frame, text=f"{unit_str}", font=FONT_PANEL_UNIT, style='PanelUnit.TLabel')
+                    unit_label.pack(side=tk.LEFT)
+                self.style.configure('PanelUnit.TLabel', background=PANEL_BG_COLOR, foreground=TEXT_COLOR_UNIT)
+        
+        if self.debug_mode: print("DEBUG: populate_left_column - EXIT")
+
+    def populate_middle_column(self, parent_frame):
+        """Populates the middle column with video, gauges, and AI suggestions."""
+        if self.debug_mode: print("DEBUG: populate_middle_column - ENTER")
+        parent_frame.rowconfigure(0, weight=3)  # Video gets more space
+        parent_frame.rowconfigure(1, weight=1)  # Gauges
+        parent_frame.rowconfigure(2, weight=2)  # AI suggestions
+        parent_frame.columnconfigure(0, weight=1)
+
+        # --- Video Stream Area ---
+        video_frame = ttk.LabelFrame(parent_frame, text="📹 实时监控", style='Section.TLabelframe', padding=5)
+        video_frame.grid(row=0, column=0, sticky="nsew", pady=(0,5))
+        self.style.configure('Section.TLabelframe', background=PANEL_BG_COLOR, bordercolor=BORDER_LINE_COLOR)
+        self.style.configure('Section.TLabelframe.Label', font=FONT_PANEL_TITLE, foreground=TEXT_COLOR_PANEL_TITLE, background=PANEL_BG_COLOR)
+        
+        self.camera_image_label = ttk.Label(video_frame, background=VIDEO_BG_COLOR, anchor=tk.CENTER)
+        self.camera_image_label.pack(expand=True, fill=tk.BOTH)
+        # Placeholder text until first frame
+        self.camera_image_label.configure(text="等待视频信号...", font=FONT_PANEL_LABEL, foreground=TEXT_COLOR_NORMAL)
+
+
+        # --- Gauges Area (Two side-by-side) ---
+        gauges_frame_container = ttk.LabelFrame(parent_frame, text="📊 等级仪表盘", style='Section.TLabelframe', padding=5)
+        gauges_frame_container.grid(row=1, column=0, sticky="nsew", pady=5)
+        gauges_frame_container.columnconfigure(0, weight=1)
+        gauges_frame_container.columnconfigure(1, weight=1)
+        gauges_frame_container.rowconfigure(0, weight=1)
+
+        # Gauge 1 (AQI)
+        self.gauge_aqi_canvas = tk.Canvas(gauges_frame_container, bg=PANEL_BG_COLOR, highlightthickness=0)
+        self.gauge_aqi_canvas.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+
+        # Gauge 2 (UV Risk) - formerly gauge_eco2_canvas
+        self.gauge_uv_risk_canvas = tk.Canvas(gauges_frame_container, bg=PANEL_BG_COLOR, highlightthickness=0)
+        self.gauge_uv_risk_canvas.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        
+        # --- AI Suggestions Area ---
+        ai_frame = ttk.LabelFrame(parent_frame, text="💡 AI健康建议", style='Section.TLabelframe', padding=5)
+        ai_frame.grid(row=2, column=0, sticky="nsew", pady=(5,0))
+        
+        self.ai_advice_text_widget = tk.Text(ai_frame, wrap=tk.WORD, height=6, font=FONT_AI_ADVICE, 
+                                             bg=PANEL_BG_COLOR, fg=TEXT_COLOR_AI_ADVICE, 
+                                             relief=tk.FLAT, highlightthickness=0,
+                                             padx=5, pady=5)
+        self.ai_advice_text_widget.pack(expand=True, fill=tk.BOTH)
+        self.ai_advice_text_widget.insert(tk.END, "AI建议正在加载...")
         self.ai_advice_text_widget.config(state=tk.DISABLED)
+        print("DEBUG: populate_middle_column - EXIT")
 
-        # --- Right Region (Charts) ---
-        right_region_frame = tk.Frame(main_regions_frame, bg=PAGE_BG_COLOR, padx=5, pady=5)
-        right_region_frame.grid(row=0, column=2, sticky="nsew", padx=(5,0)) 
-
-        self.charts_frame = tk.Frame(right_region_frame, bg=PAGE_BG_COLOR)
-        self.charts_frame.pack(expand=True, fill="both", pady=0, padx=0)
-
-        self.charts_frame.grid_rowconfigure(0, weight=1)
-        self.charts_frame.grid_rowconfigure(1, weight=1)
-        self.charts_frame.grid_rowconfigure(2, weight=1)
-        self.charts_frame.grid_columnconfigure(0, weight=1)
-        
-        print("DEBUG: self.create_main_layout finished")
-        return main_regions_frame
-
-    def update_camera_stream(self, data):
-        """更新视频流显示"""
-        self._debug_video_update_counter += 1
-        print(f"DEBUG: update_camera_stream 接收到数据类型: {type(data)}")
-
-        if not PIL_AVAILABLE:
-            if self._debug_video_update_counter % 50 == 1:  # 减少日志频率
-                print("DEBUG: Pillow (PIL) 不可用，无法处理视频流。")
-            return
-
-        try:
-            # 验证输入数据，支持更多数据格式
-            image_data_b64 = None
-            
-            # 支持dict格式 {"image": base64_data}
-            if isinstance(data, dict):
-                # 检查常见的键名模式
-                possible_keys = ["image", "img", "frame", "data", "imageData", "base64"]
-                for key in possible_keys:
-                    if key in data and isinstance(data[key], str):
-                        image_data_b64 = data[key]
-                        print(f"DEBUG: 从字典中键'{key}'提取图像数据，长度: {len(image_data_b64)}")
-                        break
-            # 支持直接传递base64字符串
-            elif isinstance(data, str):
-                # 检查是否看起来像base64数据 (常见前缀或长度)
-                if (data.startswith("data:image") or 
-                    len(data) > 100 and all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=" for c in data[:20])):
-                    image_data_b64 = data
-                    print(f"DEBUG: 直接使用字符串数据，长度: {len(data)}")
-            
-            # 如果找到的是data URI scheme格式 (例如: "data:image/jpeg;base64,/9j/4AA...")
-            if image_data_b64 and image_data_b64.startswith("data:"):
-                try:
-                    # 提取base64部分
-                    image_data_b64 = image_data_b64.split(",", 1)[1]
-                except IndexError:
-                    print("错误: 无效的Data URI格式")
-                    return
-            
-            if not image_data_b64:
-                if self._debug_video_update_counter % 10 == 1:  # 减少日志频率
-                    print(f"DEBUG: 无法获取有效的图像数据。数据类型: {type(data)}")
-                return
-                
-            # 解码Base64数据
-            try:
-                # 尝试清理错误的填充字符
-                if len(image_data_b64) % 4 != 0:
-                    missing_padding = 4 - len(image_data_b64) % 4
-                    image_data_b64 += "=" * missing_padding
-                
-                image_bytes = base64.b64decode(image_data_b64)
-            except base64.binascii.Error as b64_error:
-                print(f"错误: Base64解码错误: {b64_error}。数据是否正确编码? 数据前64字符: {image_data_b64[:64]}")
-                # 尝试移除非base64字符并再次解码
-                try:
-                    cleaned_data = ''.join(c for c in image_data_b64 if c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
-                    image_bytes = base64.b64decode(cleaned_data)
-                    print("成功: 通过清理非base64字符修复了数据")
-                except:
-                    print("错误: 即使清理后仍无法解码数据")
-                    return
-            except Exception as e:
-                print(f"错误: Base64解码过程中出现意外错误: {type(e).__name__} - {e}")
-                return
-
-            if not image_bytes:
-                print("错误: 解码后的图像数据为空。")
-                return
-
-            # 打开图像
-            try:
-                img_io = io.BytesIO(image_bytes)
-                image = Image.open(img_io)
-            except UnidentifiedImageError as uie:
-                print(f"错误: 无法识别图像文件格式。Base64数据是否为有效图像? 详情: {uie}")
-                return
-            except OSError as ose:
-                print(f"错误: 打开图像时出现OS错误: {ose}")
-                return
-            except Exception as e:
-                print(f"错误: 打开图像时出现意外错误: {type(e).__name__} - {e}")
-                return
-                    
-            # 获取视频框架尺寸 - 使用配置的尺寸而不是容器的当前尺寸
-            # 这样可以确保视频始终以固定且优化的尺寸显示
-            target_width, target_height = 450, 340  # 使用更大的目标尺寸，提高清晰度
-            
-            # 获取容器尺寸作为备选
-            container_width = self.camera_image_label.winfo_width()
-            container_height = self.camera_image_label.winfo_height()
-            
-            # 如果容器尺寸合理且大于默认目标尺寸，则使用容器尺寸
-            if container_width > 100 and container_height > 100:
-                if container_width > target_width:
-                    target_width = min(container_width, 600)  # 限制最大宽度
-                if container_height > target_height:
-                    target_height = min(container_height, 480)  # 限制最大高度
-                    
-            original_width, original_height = image.size
-            if original_width == 0 or original_height == 0:
-                print("错误: 原始图像尺寸为零。")
-                return
-
-            aspect_ratio = original_width / float(original_height)  # 确保浮点除法
-            
-            # 计算合适的尺寸，保持宽高比
-            if target_width / aspect_ratio <= target_height:
-                new_width = target_width
-                new_height = int(new_width / aspect_ratio) if aspect_ratio > 0 else target_width  # 处理aspect_ratio = 0的情况
-            else:
-                new_height = target_height
-                new_width = int(new_height * aspect_ratio)
-
-            # 确保尺寸合理
-            if new_width <= 0: new_width = 320  # 设置最小宽度
-            if new_height <= 0: new_height = 240  # 设置最小高度
-                
-            # 使用高质量的缩放方法调整图像大小
-            try:
-                # 使用LANCZOS重采样方法获得更好的图像质量
-                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            except Exception as e:
-                print(f"错误: 图像缩放失败: {e}")
-                try:
-                    # 降级到简单的重采样方法
-                    image = image.resize((new_width, new_height), Image.Resampling.NEAREST)
-                except Exception as e2:
-                    print(f"错误: 所有缩放尝试均失败: {e2}")
-                    return
-
-            # 创建Tkinter可用的图像对象
-            try:
-                self.video_photo_image = ImageTk.PhotoImage(image)
-            except RuntimeError as rte:
-                print(f"错误: 创建ImageTk.PhotoImage时出现RuntimeError: {rte}。这可能是由损坏的图像数据或Tkinter问题导致的。")
-                return
-            except Exception as e:
-                print(f"错误: 创建ImageTk.PhotoImage时出现意外错误: {type(e).__name__} - {e}")
-                return
-
-            # 更新图像显示
-            if self.camera_image_label:
-                # 更新图像，并保持对图像的引用（这很重要！）
-                self.camera_image_label.config(image=self.video_photo_image, text="")
-                self.camera_image_label.image = self.video_photo_image  # 保持引用以防垃圾回收
-                
-                # 更新标签尺寸以适应图像
-                self.camera_image_label.config(width=new_width, height=new_height)
-                
-                # 更新视频状态指示器
-                self.last_video_frame_time = datetime.now()
-                if hasattr(self, 'video_status_var'):
-                    now = self.last_video_frame_time.strftime("%H:%M:%S")
-                    self.video_status_var.set(f"视频流正常 ({now})")
-                    self.video_status_label.config(fg=TEXT_COLOR_STATUS_OK)
-                
-                # 更新视频帧计数
-                self.video_frames_received += 1
-                if self.video_frames_received % 20 == 0:
-                    print(f"已接收 {self.video_frames_received} 帧视频数据")
-            else:
-                print("错误: camera_image_label为None，无法更新视频流。")
-
-        except Exception as e:
-            print(f"视频流更新中发生严重错误: {type(e).__name__} - {e}")
-            logging.error(f"视频流更新发生严重错误: {str(e)}")
-            # 可选：在视频标签上显示错误信息
-            if hasattr(self, 'camera_image_label') and self.camera_image_label:
-                self.camera_image_label.config(image="", text=f"视频处理错误")
-                if hasattr(self, 'video_status_var') and hasattr(self, 'video_status_label'):
-                    self.video_status_var.set("视频流错误")
-                    self.video_status_label.config(fg=TEXT_COLOR_STATUS_FAIL)
-
-    def setup_ui_layout(self):
-        print("DEBUG: self.setup_ui_layout called")
-        # Header Section
-        header_frame = tk.Frame(self.root, bg=PAGE_BG_COLOR)
-        header_frame.pack(fill="x", pady=(5,0))
-        title_label = tk.Label(header_frame, text="智慧校园环境监测系统", font=FONT_APP_TITLE, fg=TEXT_COLOR_HEADER, bg=PAGE_BG_COLOR)
-        title_label.pack(pady=5)
-
-        # New frame for the info bar (time, version, sim button, status)
-        info_bar_frame = tk.Frame(header_frame, bg=PAGE_BG_COLOR)
-        info_bar_frame.pack(fill="x", pady=(0, 10))
-
-        self.time_label_widget = tk.Label(info_bar_frame, textvariable=self.time_var, font=FONT_TIMESTAMP, fg=TEXT_COLOR_NORMAL, bg=PAGE_BG_COLOR)
-        self.time_label_widget.pack(side="left", padx=(10, 5)) # Time on the far left
-
-        version_label = tk.Label(info_bar_frame, text=f"版本: {APP_VERSION}", font=FONT_STATUS, fg=TEXT_COLOR_VERSION, bg=PAGE_BG_COLOR, bd=0)
-        version_label.pack(side="left", padx=5) # Version next to time
-
-        # Connection status to the far right
-        self.connection_status_label_widget = tk.Label(info_bar_frame, textvariable=self.connection_status_var, font=FONT_STATUS, fg=TEXT_COLOR_STATUS_FAIL, bg=PAGE_BG_COLOR)
-        self.connection_status_label_widget.pack(side="right", padx=(5, 10))
-        
-        # Simulation button to the left of connection status
-        self.sim_button_widget = tk.Button(info_bar_frame, textvariable=self.sim_button_text_var, font=FONT_STATUS, 
-                                          fg="#FFFFFF", bg="#007BFF", 
-                                          activeforeground="#FFFFFF", activebackground="#0056b3", 
-                                          relief=tk.RAISED, borderwidth=2,
-                                          highlightthickness=0, command=self.toggle_simulation)
-        self.sim_button_widget.pack(side="right", padx=5)
-        # Original time_label_widget packing is removed as it's now in info_bar_frame
-        # self.time_label_widget = tk.Label(header_frame, textvariable=self.time_var, font=FONT_TIMESTAMP, fg=TEXT_COLOR_NORMAL, bg=PAGE_BG_COLOR)
-        # self.time_label_widget.pack(pady=(0,10))
-
-        self.main_content_frame = self.create_main_layout(self.root)
-        print("DEBUG: self.setup_ui_layout finished")
-
-    def setup_charts(self):
-        print("DEBUG: self.setup_charts called")
-        if not MATPLOTLIB_AVAILABLE:
-            print("Matplotlib不可用，跳过图表设置。")
-            if self.charts_frame: # Check if charts_frame exists
-                # Display a message in each chart panel area if charts_frame is available
-                placeholder_text = "图表功能不可用\n(Matplotlib未安装)"
-                
-                temp_chart_panel_placeholder = tk.Frame(self.charts_frame, bg=CHART_BG_COLOR, highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-                temp_chart_panel_placeholder.grid(row=0, column=0, sticky="nsew", pady=(0,5))
-                tk.Label(temp_chart_panel_placeholder, text=placeholder_text, fg="red", bg=CHART_BG_COLOR, justify=tk.CENTER).pack(expand=True)
-
-                humi_chart_panel_placeholder = tk.Frame(self.charts_frame, bg=CHART_BG_COLOR, highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-                humi_chart_panel_placeholder.grid(row=1, column=0, sticky="nsew", pady=5)
-                tk.Label(humi_chart_panel_placeholder, text=placeholder_text, fg="red", bg=CHART_BG_COLOR, justify=tk.CENTER).pack(expand=True)
-
-                noise_chart_panel_placeholder = tk.Frame(self.charts_frame, bg=CHART_BG_COLOR, highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-                noise_chart_panel_placeholder.grid(row=2, column=0, sticky="nsew", pady=(5,0))
-                tk.Label(noise_chart_panel_placeholder, text=placeholder_text, fg="red", bg=CHART_BG_COLOR, justify=tk.CENTER).pack(expand=True)
-            return
-
-        # Adjusted figsize to better fit the allocated column width
-        chart_figsize = (3.3, 2.2) # Approx 330x220 pixels at 100 DPI
+    def populate_right_column(self, parent_frame):
+        """填充右侧栏的图表。"""
+        if self.debug_mode: print("DEBUG: populate_right_column called")
+        # parent_frame IS the right_column_frame, no need to create another one and pack it.
+        # Charts will be packed directly into parent_frame.
 
         # Temperature Chart
-        self.fig_temp_chart = Figure(figsize=chart_figsize, dpi=100, facecolor=CHART_BG_COLOR)
-        self.ax_temp_chart = self.fig_temp_chart.add_subplot(111)
-        self.ax_temp_chart.set_facecolor(CHART_BG_COLOR)
-        self.ax_temp_chart.tick_params(axis='x', colors=CHART_TEXT_COLOR, labelsize=8)
-        self.ax_temp_chart.tick_params(axis='y', colors=CHART_TEXT_COLOR, labelsize=8)
-        self.ax_temp_chart.spines['bottom'].set_color(CHART_TEXT_COLOR)
-        self.ax_temp_chart.spines['top'].set_color(CHART_BG_COLOR) 
-        self.ax_temp_chart.spines['right'].set_color(CHART_BG_COLOR)
-        self.ax_temp_chart.spines['left'].set_color(CHART_TEXT_COLOR)
-        # self.fig_temp_chart.tight_layout(pad=0.5) # Keep tight_layout - moved after formatter for better layout
-
-        # Add X and Y labels, remove old title
-        self.ax_temp_chart.set_xlabel("时间", color=CHART_TEXT_COLOR, fontsize=8)
-        self.ax_temp_chart.set_ylabel("温度 (°C)", color=CHART_TEXT_COLOR, fontsize=8)
-        # Format X-axis to show time in H:M format
-        self.ax_temp_chart.xaxis.set_major_locator(mdates.MinuteLocator(interval=5)) # Tick every 5 minutes
-        self.ax_temp_chart.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        self.fig_temp_chart.autofmt_xdate() # Auto-format date labels to prevent overlap
-        self.fig_temp_chart.tight_layout(pad=0.5) # Apply tight_layout after all settings
-
-
-        temp_chart_panel = tk.Frame(self.charts_frame, bg=CHART_BG_COLOR, highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-        temp_chart_panel.grid(row=0, column=0, sticky="nsew", pady=(0,5))
-        self.chart_canvas_widget_temp = FigureCanvasTkAgg(self.fig_temp_chart, master=temp_chart_panel)
-        self.chart_canvas_widget_temp.draw()
-        self.chart_canvas_widget_temp.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Reduced figsize slightly
+        self.fig_temp, self.ax_temp = plt.subplots(figsize=(4, 2.2)) # Was (5, 2.5)
+        self.ax_temp.set_title("温度变化 (°C)")
+        self.ax_temp.set_xlabel("时间")
+        self.ax_temp.set_ylabel("温度 (°C)")
+        self.line_temp, = self.ax_temp.plot([], [], marker='o', markersize=3, linestyle='-', color='r') # Smaller markers
+        self.canvas_temp = FigureCanvasTkAgg(self.fig_temp, master=parent_frame) # Use parent_frame
+        self.canvas_temp_widget = self.canvas_temp.get_tk_widget()
+        self.canvas_temp_widget.pack(fill=tk.BOTH, expand=True, pady=(0,5))
+        self.fig_temp.tight_layout()
 
         # Humidity Chart
-        self.fig_humi_chart = Figure(figsize=chart_figsize, dpi=100, facecolor=CHART_BG_COLOR)
-        self.ax_humi_chart = self.fig_humi_chart.add_subplot(111)
-        self.ax_humi_chart.set_facecolor(CHART_BG_COLOR)
-        self.ax_humi_chart.tick_params(axis='x', colors=CHART_TEXT_COLOR, labelsize=8)
-        self.ax_humi_chart.tick_params(axis='y', colors=CHART_TEXT_COLOR, labelsize=8)
-        self.ax_humi_chart.spines['bottom'].set_color(CHART_TEXT_COLOR)
-        self.ax_humi_chart.spines['top'].set_color(CHART_BG_COLOR)
-        self.ax_humi_chart.spines['right'].set_color(CHART_BG_COLOR)
-        self.ax_humi_chart.spines['left'].set_color(CHART_TEXT_COLOR)
-        # self.fig_humi_chart.tight_layout(pad=0.5) # Keep tight_layout - moved after formatter
-
-        # Add X and Y labels, remove old title
-        self.ax_humi_chart.set_xlabel("时间", color=CHART_TEXT_COLOR, fontsize=8)
-        self.ax_humi_chart.set_ylabel("湿度 (%RH)", color=CHART_TEXT_COLOR, fontsize=8)
-        # Format X-axis to show time in H:M format
-        self.ax_humi_chart.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
-        self.ax_humi_chart.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        self.fig_humi_chart.autofmt_xdate()
-        self.fig_humi_chart.tight_layout(pad=0.5)
-
-        humi_chart_panel = tk.Frame(self.charts_frame, bg=CHART_BG_COLOR, highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-        humi_chart_panel.grid(row=1, column=0, sticky="nsew", pady=5)
-        self.chart_canvas_widget_humi = FigureCanvasTkAgg(self.fig_humi_chart, master=humi_chart_panel)
-        self.chart_canvas_widget_humi.draw()
-        self.chart_canvas_widget_humi.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Reduced figsize slightly
+        self.fig_humi, self.ax_humi = plt.subplots(figsize=(4, 2.2)) # Was (5, 2.5)
+        self.ax_humi.set_title("湿度变化 (%)")
+        self.ax_humi.set_xlabel("时间")
+        self.ax_humi.set_ylabel("湿度 (%)")
+        self.line_humi, = self.ax_humi.plot([], [], marker='o', markersize=3, linestyle='-', color='b') # Smaller markers
+        self.canvas_humi = FigureCanvasTkAgg(self.fig_humi, master=parent_frame) # Use parent_frame
+        self.canvas_humi_widget = self.canvas_humi.get_tk_widget()
+        self.canvas_humi_widget.pack(fill=tk.BOTH, expand=True, pady=(0,5))
+        self.fig_humi.tight_layout()
 
         # Noise Chart
-        self.fig_noise_chart = Figure(figsize=chart_figsize, dpi=100, facecolor=CHART_BG_COLOR)
-        self.ax_noise_chart = self.fig_noise_chart.add_subplot(111)
-        self.ax_noise_chart.set_facecolor(CHART_BG_COLOR)
-        self.ax_noise_chart.tick_params(axis='x', colors=CHART_TEXT_COLOR, labelsize=8)
-        self.ax_noise_chart.tick_params(axis='y', colors=CHART_TEXT_COLOR, labelsize=8)
-        self.ax_noise_chart.spines['bottom'].set_color(CHART_TEXT_COLOR)
-        self.ax_noise_chart.spines['top'].set_color(CHART_BG_COLOR)
-        self.ax_noise_chart.spines['right'].set_color(CHART_BG_COLOR)
-        self.ax_noise_chart.spines['left'].set_color(CHART_TEXT_COLOR)
-        # self.fig_noise_chart.tight_layout(pad=0.5) # Keep tight_layout - moved after formatter
-        
-        # Add X and Y labels, remove old title
-        self.ax_noise_chart.set_xlabel("时间", color=CHART_TEXT_COLOR, fontsize=8)
-        self.ax_noise_chart.set_ylabel("噪音 (dB)", color=CHART_TEXT_COLOR, fontsize=8)
-        # Format X-axis to show time in H:M format
-        self.ax_noise_chart.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
-        self.ax_noise_chart.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        self.fig_noise_chart.autofmt_xdate()
-        self.fig_noise_chart.tight_layout(pad=0.5)
-        
-        noise_chart_panel = tk.Frame(self.charts_frame, bg=CHART_BG_COLOR, highlightbackground=BORDER_LINE_COLOR, highlightthickness=1)
-        noise_chart_panel.grid(row=2, column=0, sticky="nsew", pady=(5,0))
-        self.chart_canvas_widget_noise = FigureCanvasTkAgg(self.fig_noise_chart, master=noise_chart_panel)
-        self.chart_canvas_widget_noise.draw()
-        self.chart_canvas_widget_noise.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        print("DEBUG: self.setup_charts finished")
+        # Reduced figsize slightly
+        self.fig_noise, self.ax_noise = plt.subplots(figsize=(4, 2.2)) # Was (5, 2.5)
+        self.ax_noise.set_title("噪声水平 (dB)")
+        self.ax_noise.set_xlabel("时间")
+        self.ax_noise.set_ylabel("噪声 (dB)") # Corrected from "噪音" to "噪声" to match title
+        self.line_noise, = self.ax_noise.plot([], [], marker='o', markersize=3, linestyle='-', color='g') # Smaller markers
+        self.canvas_noise = FigureCanvasTkAgg(self.fig_noise, master=parent_frame) # Use parent_frame
+        self.canvas_noise_widget = self.canvas_noise.get_tk_widget()
+        self.canvas_noise_widget.pack(fill=tk.BOTH, expand=True)
+        self.fig_noise.tight_layout()
 
-    def update_time_display(self):
-        now = datetime.now()
-        # Get Chinese weekday name
-        days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-        day_name = days[now.weekday()]
+        # Initialize chart data storage
+        self.chart_data = {
+            # Ensure keys here match keys used in update_chart and panel_configs for chartable items
+            "temp": {"times": [], "values": [], "line": self.line_temp, "ax": self.ax_temp, "canvas": self.canvas_temp, "fig": self.fig_temp},
+            "humi": {"times": [], "values": [], "line": self.line_humi, "ax": self.ax_humi, "canvas": self.canvas_humi, "fig": self.fig_humi},
+            "noise": {"times": [], "values": [], "line": self.line_noise, "ax": self.ax_noise, "canvas": self.canvas_noise, "fig": self.fig_noise}
+        }
+
+    def toggle_simulation_mode(self):
+        """切换模拟数据模式。"""
+        self.use_simulation = not self.use_simulation
+        if self.use_simulation:
+            self.sim_button_text_var.set("禁用模拟数据")
+            self.update_connection_status_display(False, status_text="模拟模式已启用")
+            logging.info("模拟数据模式已启用")
+            # Optionally, trigger an update with simulation data here
+        else:
+            self.sim_button_text_var.set("启用模拟数据")
+            # Re-evaluate actual connection status
+            self.update_connection_status_display(self._mqtt_connected, status_text="模拟模式已禁用 - 尝试连接")
+            logging.info("模拟数据模式已禁用")
+            if not self._mqtt_connected:
+                self.connect_mqtt() # Try to reconnect if not connected
+
+    def initial_gauge_draw(self):
+        """Draws the gauges for the first time after UI is set up."""
+        if hasattr(self, 'debug_mode') and self.debug_mode:
+            print("DEBUG: SmartCampusDashboard initial_gauge_draw - ENTER")
         
-        # Format the string in Chinese
-        now_str = now.strftime(f"%Y年%m月%d日 {day_name} %H:%M:%S")
-        
-        self.time_var.set(now_str)
-        
-        # 更新窗口标题，显示数据接收状态
-        if hasattr(self, 'last_data_received_time') and self.last_data_received_time:
-            time_diff = (datetime.now() - self.last_data_received_time).total_seconds()
-            if time_diff < 10:
-                status = "数据正常接收中"
-            elif time_diff < 30:
-                status = "数据接收缓慢"
-            else:
-                status = "长时间未接收到数据"
-            self.root.title(f"{APP_TITLE} - {status}")
-        
-        self.root.after(1000, self.update_time_display)
+        # Ensure this method is called after populate_middle_column has created gauge canvases
+        # For example, self.gauge_aqi_canvas and self.gauge_uv_risk_canvas should exist.
+
+        for key, config in self.panel_configs.items():
+            if config.get("gauge"):
+                current_value_str = self.data_vars[key].get()
+                
+                if key == "aqi" and hasattr(self, 'gauge_aqi_canvas') and self.gauge_aqi_canvas:
+                    current_value = 0 # Default
+                    try:
+                        if current_value_str != "--" and current_value_str is not None: # Added None check
+                           current_value = int(float(current_value_str)) # AQI levels are often integer indices
+                    except ValueError:
+                        logging.warning(f"Initial gauge draw for AQI: Could not convert '{current_value_str}' to int.")
+                    self.update_gauge(self.gauge_aqi_canvas, current_value, config.get("gauge_max", 5), "AQI", config.get("levels"))
+                
+                elif key == "uv_risk" and hasattr(self, 'gauge_uv_risk_canvas') and self.gauge_uv_risk_canvas:
+                    level_value = 0 # Default to first level (e.g., "低")
+                    levels = config.get("levels", [])
+                    if current_value_str in levels:
+                        level_value = levels.index(current_value_str)
+                    elif current_value_str != "--" and current_value_str is not None: # Added None check
+                        try:
+                            # If current_value_str is a number, try to use it as an index
+                            level_value = int(float(current_value_str))
+                            if not (0 <= level_value < len(levels)):
+                                logging.warning(f"Initial gauge draw for UV Risk: Index {level_value} out of bounds for levels. Resetting to 0.")
+                                level_value = 0 
+                        except ValueError:
+                             logging.warning(f"Initial gauge draw for UV Risk: Value '{current_value_str}' is not a recognized level and not a valid index. Resetting to 0.")
+                             level_value = 0 # Reset to default if not a recognized string or valid index
+                    
+                    self.update_gauge(self.gauge_uv_risk_canvas, level_value, config.get("gauge_max", 4), "UV Risk", levels)
+
+        if hasattr(self, 'debug_mode') and self.debug_mode:
+            print("DEBUG: SmartCampusDashboard initial_gauge_draw - EXIT")
+
+    # Ensure other methods like connect_mqtt, start_weather_updates etc. are below this if they are part of the class.
+    # The end of the file might look like this:
 
     def connect_mqtt(self):
+        """连接MQTT服务器"""
         try:
-            # 显示更详细的连接信息
-            conn_msg = f"尝试连接MQTT服务器: 192.168.1.129:1883 (客户端ID: {MQTT_CLIENT_ID})"
-            logging.info(conn_msg)
-            if self.debug_mode:
-                print(f"DEBUG: {conn_msg}")
+            # 创建MQTT客户端
+            client_id = f"SmartCampusDashboard_{random.randint(1000, 9999)}"
+            self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
+            
+            # 设置回调函数
+            self.mqtt_client.on_connect = self.on_connect
+            self.mqtt_client.on_message = self.on_message
+            self.mqtt_client.on_disconnect = self.on_disconnect
+            
+            # 设置认证（如果需要）
+            mqtt_config = self.config.get("mqtt", {})
+            username = mqtt_config.get("username")
+            password = mqtt_config.get("password")
+            if username and password:
+                self.mqtt_client.username_pw_set(username, password)
+            
+            # 连接到MQTT代理
+            host = mqtt_config.get("host", "127.0.0.1")
+            port = mqtt_config.get("port", 1883)
+            
+            print(f"正在连接到MQTT服务器: {host}:{port}")
+            self.mqtt_client.connect_async(host, port, 60)
+            self.mqtt_client.loop_start()
             
             self.update_connection_status_display(False, "正在连接MQTT服务器...")
-            self.mqtt_client.connect("192.168.1.129", 1883, 60)  # 修改为与测试脚本相同的地址
-            self.mqtt_client.loop_start()
-            logging.debug("MQTT客户端循环已启动")
-        except socket.error as e:
-            logging.error(f"MQTT连接错误: {e} - 无法连接到代理")
-            self.update_connection_status_display(False, f"连接错误: {e}")
-            # 启动自动重连线程
-            if not hasattr(self, '_mqtt_reconnect_thread') or not self._mqtt_reconnect_thread or not self._mqtt_reconnect_thread.is_alive():
-                self._mqtt_reconnect_thread = threading.Thread(target=self._mqtt_reconnect, daemon=True)
-                self._mqtt_reconnect_thread.start()
+            
         except Exception as e:
-            logging.error(f"MQTT连接期间发生未知错误: {type(e).__name__} - {e}")
-            self.update_connection_status_display(False, f"未知错误: {e}")
-            # 启动自动重连线程
-            if not hasattr(self, '_mqtt_reconnect_thread') or not self._mqtt_reconnect_thread or not self._mqtt_reconnect_thread.is_alive():
-                self._mqtt_reconnect_thread = threading.Thread(target=self._mqtt_reconnect, daemon=True)
-                self._mqtt_reconnect_thread.start()
+            print(f"MQTT连接失败: {e}")
+            self.update_connection_status_display(False, f"MQTT连接失败: {e}")
 
     def on_connect(self, client, userdata, flags, rc, properties=None):
-        logging.info(f"MQTT连接尝试结果: {mqtt.connack_string(rc)}, flags: {flags}")
-        if rc == 0: # Connection successful
-            self._mqtt_connected = True
-            self._reconnect_attempts = 0
-            self.update_connection_status_display(True)
-            logging.info("MQTT连接成功，订阅主题...")
-            # 使用通配符订阅所有SIOT主题
-            client.subscribe("siot/#")
-            logging.info("  已订阅: siot/# (通配符订阅)")
+        """MQTT连接成功回调"""
+        if rc == 0:
+            print("MQTT连接成功！")
+            self.update_connection_status_display(True, "MQTT连接成功")
             
-            # 同时保留对特定主题的订阅
-            for topic in MQTT_TOPICS:
+            # 订阅主题
+            mqtt_topics = self.config.get("mqtt", {}).get("topics", [])
+            for topic in mqtt_topics:
                 client.subscribe(topic)
-                logging.info(f"  已订阅: {topic}")
-            # Also subscribe to weather topic if not already in MQTT_TOPICS for general messages
-            if MQTT_WEATHER_TOPIC not in MQTT_TOPICS:
-                 client.subscribe(MQTT_WEATHER_TOPIC)
-                 logging.info(f"  已订阅天气主题: {MQTT_WEATHER_TOPIC}")
-            self.fetch_weather_data() # Fetch initial weather data on connect
-        elif rc == 5: # Not authorized
-            print("MQTT连接失败，状态码：Not authorized")
-            self.update_connection_status_display(False, "MQTT认证失败")
+                print(f"已订阅主题: {topic}")
+                
+            # 启用实时数据模式
+            self.use_simulation = False
         else:
-            error_string = mqtt.connack_string(rc)
-            print(f"MQTT连接失败，状态码：{rc} ({error_string})")
-            self.update_connection_status_display(False, f"MQTT连接失败: {error_string} (码 {rc})")
-
-    def on_disconnect(self, client, userdata, flags, rc, properties=None): # Added flags for V2            # rc is a DisconnectReasonCode instance for V2, or an int for V1
-        if isinstance(rc, int): # V1 compatibility or unexpected
-            reason_code_int = rc
-            reason_string = f"Return code: {rc}"
-        else: # V2, rc is a ReasonCode object
-            reason_code_int = rc.value if hasattr(rc, 'value') else -1 # Get int value if possible
-            reason_string = str(rc)
-            
-        logging.warning(f"MQTT连接断开: {reason_string} (码 {reason_code_int})")
-        self.update_connection_status_display(False, f"MQTT连接断开: {reason_string}")
-        
-        # 开始自动重连
-        if not self._mqtt_reconnect_thread or not self._mqtt_reconnect_thread.is_alive():
-            logging.info("启动MQTT重连线程")
-            self._mqtt_reconnect_thread = threading.Thread(target=self._mqtt_reconnect, daemon=True)
-            self._mqtt_reconnect_thread.start()
-
-        logging.debug(f"MQTT断开: client={client}, userdata={userdata}, flags={flags}, rc(reason)={reason_string}")
-        
-        # 标记连接状态
-        self._mqtt_connected = False
-        
-    def _mqtt_reconnect(self):
-        """尝试自动重新连接MQTT服务器的方法，将在一个单独的线程中运行。"""
-        max_attempts = 10  # 最大重试次数
-        base_delay = 2  # 基础延迟秒数
-        
-        self._reconnect_attempts = 0
-        
-        while self._reconnect_attempts < max_attempts:
-            self._reconnect_attempts += 1
-            
-            # 计算延迟时间，使用指数退避策略
-            delay = min(base_delay * (2 ** (self._reconnect_attempts - 1)), 60)
-            
-            # 更新状态显示
-            self.update_connection_status_display(
-                False, 
-                f"MQTT重连中... (尝试 {self._reconnect_attempts}/{max_attempts})"
-            )
-            
-            logging.info(f"MQTT重连尝试 {self._reconnect_attempts}/{max_attempts}，延迟 {delay}秒")
-            
-            # 延迟一定时间后重试
-            time.sleep(delay)
-            
-            # 尝试连接
-            try:
-                if hasattr(self, 'mqtt_client') and self.mqtt_client:
-                    # 关闭现有连接
-                    try:
-                        self.mqtt_client.loop_stop()
-                        self.mqtt_client.disconnect()
-                    except:
-                        pass
-                    
-                # 重新创建MQTT客户端并连接
-                logging.info("重新连接MQTT服务器...")
-                self.connect_mqtt()
-                
-                # 等待几秒检查是否连接成功
-                time.sleep(3)
-                
-                # 通过连接状态变量检查是否成功
-                if hasattr(self, '_mqtt_connected') and self._mqtt_connected:
-                    logging.info("MQTT重连成功")
-                    return True
-            except Exception as e:
-                logging.error(f"MQTT重连错误: {str(e)}")
-        
-        # 如果达到最大重试次数仍未成功
-        logging.error(f"MQTT重连失败，达到最大尝试次数: {max_attempts}")
-        self.update_connection_status_display(False, "MQTT连接失败，请检查网络或服务器")
-        return False
-        
-        # if reason_code_int == 0:
-        #     print("MQTT正常断开连接。")
-        #     # self.update_connection_status_display(False, "MQTT已断开") # Or a more neutral message
-        # else:
-        #     print(f"MQTT意外断开连接，原因: {reason_string}")
-        #     self.update_connection_status_display(False, f"MQTT断开: {reason_string}")
-        
-        # For any disconnect, update status unless it was an intentional shutdown
-        # We might need a flag for intentional disconnect if self.on_closing handles it.
-        # For now, assume any disconnect callback means connection is lost.
-        self.update_connection_status_display(False, f"MQTT已断开 ({reason_string})")
-
+            print(f"MQTT连接失败，返回码: {rc}")
+            self.update_connection_status_display(False, f"MQTT连接失败 (码: {rc})")
+            # 启用模拟数据模式
+            self.use_simulation = True
 
     def on_message(self, client, userdata, msg):
-        # global panel_configs # panel_configs is a global constant, can be accessed directly or via self if passed during init
-        
-        # 记录最后一次数据接收时间
-        self.last_data_received_time = datetime.now()
-        
-        payload_str = ""
+        """MQTT消息接收回调"""
         try:
-            # Try to decode as UTF-8. If it fails, it might be raw bytes for an image,
-            # but for camera, we expect base64 encoded string, often within JSON.
-            payload_str = msg.payload.decode('utf-8')
-        except UnicodeDecodeError:
-            # If it's the camera topic and decoding fails, it's problematic as we expect string data.
-            # For other topics, it might be binary, but our current sensors send strings.
-            logging.error(f"UnicodeDecodeError for topic {msg.topic}. Payload might not be UTF-8.")
-            # If it's camera topic, we probably can't proceed with current logic.
-            if msg.topic == self.MQTT_CAMERA_TOPIC:
-                logging.error(f"Camera topic {msg.topic} received non-UTF-8 payload. Cannot process as base64 string.")
-                return
-            # For other topics, this would be an unexpected error.
-            # For now, just return, or handle as appropriate if binary data is expected for some topics.
-            return
-
-        topic_str = msg.topic
-        # 只记录有限的payload前缀以避免日志文件过大
-        logging.debug(f"接收消息: Topic: {topic_str}, Payload前缀: {payload_str[:30]}...")
-
-        # 打印完整的主题和数据用于调试
-        print(f"DEBUG: 收到主题: {topic_str}, 数据: {payload_str}")
-
-        # Simplified topic to key mapping based on panel_configs
-        matched_key = None
-        
-        # 特殊处理UV风险等级主题
-        if topic_str == "siot/uv风险等级":
-            # 找到对应的UV风险等级面板键
-            for key, config_data in self.panel_configs.items():
-                if "base_topic_name" in config_data and config_data["base_topic_name"] == "紫外线指数":
-                    matched_key = key
-                    logging.info(f"接收到UV风险等级数据: {payload_str}")
-                    break
-        
-        # 如果不是特殊处理的主题，则进行常规匹配
-        if not matched_key:
-            # Iterate through panel_configs to find which panel this topic belongs to
-            for key, config_data in self.panel_configs.items():
-                # Assuming sensor topics are generally prefixed with "siot/"
-                # and their specific part is in "base_topic_name"
-                if "base_topic_name" in config_data:
-                    # 修复主题匹配逻辑
-                    # 1. 精确匹配完整主题
-                    expected_topic = "siot/" + config_data["base_topic_name"]
-                    if topic_str == expected_topic:
-                        matched_key = key # 'key' is like "temp", "humi", "aqi"
-                        print(f"DEBUG: 精确匹配主题: {topic_str} -> {key}, 数据: {payload_str}")
-                        break
-                    # 2. 处理通配符情况（例如从 'siot/#' 订阅到的主题）
-                    if topic_str.startswith("siot/"):
-                        topic_part = topic_str.split("/", 1)[1]
-                        # 精确匹配主题名
-                        if config_data["base_topic_name"] == topic_part:
-                            matched_key = key
-                            print(f"DEBUG: 部分主题匹配: {topic_str} -> {key}, 数据: {payload_str}")
-                            break
-                        # 尝试模糊匹配（针对某些主题可能有前缀或后缀的情况）
-                        if topic_part.find(config_data["base_topic_name"]) >= 0:
-                            print(f"DEBUG: 模糊匹配主题: {topic_str} -> {key}, 数据: {payload_str}")
-                            matched_key = key
-                            break
-        
-        if topic_str == self.MQTT_WEATHER_TOPIC:
-            print(f"DEBUG: Received message on WEATHER_TOPIC: {topic_str}")
-            try:
-                weather_data_json = json.loads(payload_str)
-                self.root.after(0, self.update_weather_display, weather_data_json, None)
-            except json.JSONDecodeError as e:
-                print(f"ERROR: JSONDecodeError for weather data on topic {topic_str}: {e}. Payload: {payload_str}")
-            except Exception as e:
-                print(f"ERROR: Exception processing weather data for topic {topic_str}: {type(e).__name__} - {e}")
-            return
-
-        elif topic_str == self.MQTT_CAMERA_TOPIC:
-            print(f"DEBUG: Received message on CAMERA_TOPIC: {topic_str}") # New log
-            try:
-                image_data_b64 = None
-                
-                # Try to parse JSON first, in case image is in a JSON payload
-                try:
-                    json_data = json.loads(payload_str)
-                    # Look for base64 encoded image string in common JSON structures
-                    for key in ['image', 'data', 'frame', 'image_data', 'image_data_b64', 'base64', 'imageBase64']:
-                        if key in json_data and isinstance(json_data[key], str):
-                            print(f"DEBUG: Extracted {key} from JSON payload for camera.")
-                            image_data_b64 = json_data[key]
-                            break
-                except json.JSONDecodeError:
-                    # If not JSON, assume the entire payload is base64 data
-                    print("DEBUG: Camera payload is not JSON, treating as direct base64 data.")
-                    image_data_b64 = payload_str
-                
-                if image_data_b64:
-                    print(f"DEBUG: Queueing camera frame update. image_data_b64 (first 30): {image_data_b64[:30]}")
-                    # Use after() to move image processing to the main thread - wrap in a dictionary
-                    self.root.after(0, self.update_camera_stream, {"image": image_data_b64})
-                    # Update frame statistics
-                    self.video_frames_received += 1
-                    self.last_video_frame_time = datetime.now()
-                else:
-                    print("DEBUG: No valid image data found in camera topic payload.")
-            except Exception as e:
-                print(f"ERROR: Exception in on_message for camera topic {topic_str} before queueing update_camera_stream: {type(e).__name__} - {e}")
-            return # Explicit return after handling camera topic
-
-        elif matched_key:
-            if self.debug_mode:
-                print(f"DEBUG: 匹配主题 {topic_str} 到面板键 {matched_key}, 数据: {payload_str}")
+            topic = msg.topic
+            payload = msg.payload.decode('utf-8', errors='ignore')
             
-            try:
-                data_value = payload_str
-                data_processed = False
-                
-                # 尝试几种不同的数据格式解析
-                # 1. 尝试解析JSON
-                if payload_str.startswith('{') and payload_str.endswith('}'):
-                    try:
-                        json_data = json.loads(payload_str)
-                        
-                        # 支持几种常见的JSON格式
-                        if 'value' in json_data:
-                            data_value = json_data['value']
-                            data_processed = True
-                            print(f"DEBUG: 从JSON中提取'value'字段: {data_value}")
-                        elif 'data' in json_data:
-                            data_value = json_data['data']
-                            data_processed = True
-                            print(f"DEBUG: 从JSON中提取'data'字段: {data_value}")
-                        else:
-                            # 使用第一个找到的数值
-                            for key, val in json_data.items():
-                                if isinstance(val, (int, float, str)):
-                                    data_value = val
-                                    data_processed = True
-                                    print(f"DEBUG: 从JSON中提取字段 {key}: {data_value}")
-                                    break
-                    except json.JSONDecodeError:
-                        print(f"DEBUG: 数据不是有效JSON: {payload_str}")
-                
-                # 2. 尝试识别百分比值
-                if not data_processed and '%' in payload_str:
-                    try:
-                        # 尝试提取百分比前面的数字
-                        numeric_part = ''.join(c for c in payload_str.split('%')[0] if c.isdigit() or c == '.')
-                        if numeric_part:
-                            data_value = float(numeric_part)
-                            data_processed = True
-                            print(f"DEBUG: 提取百分比值: {data_value}")
-                    except ValueError:
-                        pass
-                
-                # 3. 尝试直接提取数值
-                if not data_processed:
-                    try:
-                        # 尝试将整个字符串视为数值
-                        data_value = float(payload_str)
-                        data_processed = True
-                        print(f"DEBUG: 直接转换为数值: {data_value}")
-                    except ValueError:
-                        try:
-                            # 尝试提取所有数字字符作为数值
-                            numeric_part = ''.join(c for c in payload_str if c.isdigit() or c == '.')
-                            if numeric_part:
-                                data_value = float(numeric_part)
-                                data_processed = True
-                                print(f"DEBUG: 提取数值部分: {data_value}")
-                        except ValueError:
-                            pass
-                
-                # 4. 如果经过以上处理仍无法提取有效数据，记录日志
-                if not data_processed and self.debug_mode:
-                    print(f"DEBUG: 无法处理数据: {payload_str}")
-
-                self.root.after(0, self.update_sensor_data, matched_key, data_value)
-            except Exception as e:
-                print(f"ERROR: Exception processing sensor data for topic {topic_str}, key {matched_key}: {type(e).__name__} - {e}")
-        else:
-            # 改进未处理主题的日志记录，提供更详细的信息
-            logging.warning(f"收到未处理主题消息: {topic_str}. 负载前缀: {payload_str[:50]}")
-            print(f"Warning: Received message on unhandled topic: {topic_str}")
+            print(f"收到MQTT消息: {topic} = {payload}")
             
-            # 尝试猜测最佳匹配的面板配置
-            best_match = None
-            best_score = 0
-            
-            for key, config_data in self.panel_configs.items():
-                if "base_topic_name" in config_data:
-                    topic_name = config_data["base_topic_name"]
-                    # 简单的字符串相似性检查
-                    common_chars = sum(c1 == c2 for c1, c2 in zip(topic_str, "siot/" + topic_name))
-                    score = common_chars / max(len(topic_str), len("siot/" + topic_name))
-                    if score > 0.5 and score > best_score:  # 相似度阈值
-                        best_match = key
-                        best_score = score
-                            
-            if best_match:
-                logging.info(f"发现可能的匹配: 主题 {topic_str} 可能对应面板键 {best_match}")
-                print(f"可能的匹配: 主题 {topic_str} → 面板 {best_match} ({self.panel_configs[best_match]['display_title']})")
-                try:
-                    # 尝试使用猜测的匹配更新数据
-                    self.root.after(0, self.update_sensor_data, best_match, payload_str)
-                    print(f"尝试以 {best_match} 处理未匹配主题的数据: {payload_str}")
-                except Exception as e:
-                    print(f"尝试处理未匹配主题时出错: {e}")
+            # 处理传感器数据
+            topic_parts = topic.split('/')
+            if len(topic_parts) >= 2:
+                sensor_name = topic_parts[-1]  # 取最后一部分作为传感器名称
+                
+                # 更新数据
+                if sensor_name in self.data_vars:
+                    self.data_vars[sensor_name].set(payload)
+                    
+                    # 如果是仪表盘数据，更新仪表盘
+                    if sensor_name in self.panel_configs:
+                        config = self.panel_configs[sensor_name]
+                        if config.get("gauge"):
+                            self.update_gauge_data(sensor_name, payload)
+                
+            # 处理视频数据
+            if "视频" in topic or "video" in topic.lower():
+                self.process_video_frame(payload)
+                
+        except Exception as e:
+            print(f"处理MQTT消息时出错: {e}")
 
-    def update_sensor_data(self, panel_key, data_value): # Renamed 'topic' to 'panel_key', 'data_str' to 'data_value'
-        # 只在调试模式下输出详细日志
-        if self.debug_mode:
-            print(f"DEBUG: update_sensor_data调用，面板键: {panel_key}, 数据: {str(data_value)[:50]}")
+    def on_disconnect(self, client, userdata, rc, properties=None):
+        """MQTT断开连接回调"""
+        print(f"MQTT连接已断开，返回码: {rc}")
+        self.update_connection_status_display(False, "MQTT连接已断开")
         
-        # 记录最后一次数据接收时间，用于状态监控
-        self.last_data_received_time = datetime.now()
+        # 启用模拟数据模式
+        self.use_simulation = True
         
-        # 如果启用了模拟模式，忽略真实传感器数据
-        if self.use_simulation:
-            if self.debug_mode:
-                print("模拟模式已启用，忽略真实传感器数据。")
-            return
+        # 尝试重连（10秒后）
+        self.root.after(10000, self.connect_mqtt)
 
-        # 确保数据为字符串类型
-        if not isinstance(data_value, str):
-            data_value = str(data_value)
-            
-        # 尝试清理数据，处理可能的JSON或其他格式
-        cleaned_data = data_value
+    def start_weather_updates(self):
+        """启动天气数据更新"""
         try:
-            # 检查数据是否可能是JSON格式
-            if data_value.startswith('{') and data_value.endswith('}'):
-                json_data = json.loads(data_value)
-                if 'value' in json_data:
-                    cleaned_data = str(json_data['value'])
-                elif 'data' in json_data:
-                    cleaned_data = str(json_data['data'])
-                else:
-                    # 使用第一个找到的数值
-                    for key, value in json_data.items():
-                        if isinstance(value, (int, float)):
-                            cleaned_data = str(value)
-                            break
-            # 尝试直接转换为浮点数，移除非数字字符
+            print("启动天气数据更新...")
+            # 首次立即获取
+            self.fetch_weather_data()
+            # 每30分钟更新一次
+            self.root.after(30 * 60 * 1000, self.start_weather_updates)
+        except Exception as e:
+            print(f"天气数据更新失败: {e}")
+            # 即使失败也要继续定期尝试
+            self.root.after(30 * 60 * 1000, self.start_weather_updates)
+
+    def fetch_weather_data(self):
+        """获取天气数据"""
+        try:
+            import requests
+            
+            api_key = "d24595021efb5faa04f4f6744c94086f"
+            city = "Tianshui"
+            url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=zh_cn"
+            
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            
+            if response.status_code == 200:
+                # 更新天气数据
+                if "weather_desc" in self.data_vars:
+                    weather_desc = data.get("weather", [{}])[0].get("description", "未知")
+                    self.data_vars["weather_desc"].set(weather_desc)
+                    
+                if "wind_speed" in self.data_vars:
+                    wind_speed = data.get("wind", {}).get("speed", 0)
+                    self.data_vars["wind_speed"].set(f"{wind_speed:.1f}")
+                    
+                print("天气数据获取成功")
             else:
+                print(f"天气API返回错误: {data}")
+                
+        except Exception as e:
+            print(f"获取天气数据失败: {e}")
+
+    def start_time_updates(self):
+        """启动时间更新"""
+        try:
+            current_time = time.strftime("%H:%M:%S")
+            if hasattr(self, 'time_var'):
+                self.time_var.set(current_time)
+            
+            # 每秒更新一次
+            self.root.after(1000, self.start_time_updates)
+        except Exception as e:
+            print(f"时间更新失败: {e}")
+            # 继续尝试
+            self.root.after(1000, self.start_time_updates)
+
+    def start_system_status_check(self):
+        """启动系统状态检查"""
+        try:
+            print("系统状态检查...")
+            
+            # 检查MQTT连接状态
+            if self.mqtt_client and self.mqtt_client.is_connected():
+                print("MQTT连接正常")
+            else:
+                print("MQTT连接异常")
+                
+            # 检查数据更新状态
+            current_time = time.time()
+            if hasattr(self, 'last_data_update'):
+                time_since_update = current_time - self.last_data_update
+                if time_since_update > 300:  # 5分钟无数据
+                    print("警告：长时间未收到数据")
+                    if not self.use_simulation:
+                        print("切换到模拟数据模式")
+                        self.use_simulation = True
+            
+            # 每分钟检查一次
+            self.root.after(60000, self.start_system_status_check)
+            
+        except Exception as e:
+            print(f"系统状态检查失败: {e}")
+            self.root.after(60000, self.start_system_status_check)
+
+    def update_gauge(self, canvas, value, max_value, title, levels=None):
+        """更新仪表盘显示"""
+        if not canvas:
+            return
+            
+        try:
+            # 清除画布
+            canvas.delete("all")
+            
+            # 画布尺寸
+            width = canvas.winfo_width() or 200
+            height = canvas.winfo_height() or 200
+            
+            # 中心点和半径
+            center_x = width // 2
+            center_y = height // 2
+            radius = min(width, height) // 2 - 20
+            
+            # 绘制外圆
+            canvas.create_oval(center_x - radius, center_y - radius,
+                             center_x + radius, center_y + radius,
+                             outline="#CCCCCC", width=2)
+            
+            # 绘制刻度
+            import math
+            for i in range(6):  # 6个刻度点
+                angle = math.radians(-180 + i * 36)  # 180度范围，6个点
+                x1 = center_x + (radius - 10) * math.cos(angle)
+                y1 = center_y + (radius - 10) * math.sin(angle)
+                x2 = center_x + radius * math.cos(angle)
+                y2 = center_y + radius * math.sin(angle)
+                canvas.create_line(x1, y1, x2, y2, fill="#CCCCCC", width=2)
+            
+            # 计算指针角度
+            if max_value > 0:
+                ratio = min(value / max_value, 1.0)
+            else:
+                ratio = 0
+            needle_angle = math.radians(-180 + ratio * 180)
+            
+            # 绘制指针
+            needle_x = center_x + (radius - 30) * math.cos(needle_angle)
+            needle_y = center_y + (radius - 30) * math.sin(needle_angle)
+            canvas.create_line(center_x, center_y, needle_x, needle_y,
+                             fill="#FF6666", width=4)
+            
+            # 绘制中心圆
+            canvas.create_oval(center_x - 8, center_y - 8,
+                             center_x + 8, center_y + 8,
+                             fill="#FF6666", outline="#FF6666")
+            
+            # 显示数值
+            if levels and isinstance(value, int) and 0 <= value < len(levels):
+                display_text = levels[value]
+            else:
+                display_text = str(value)
+                
+            canvas.create_text(center_x, center_y + 40,
+                             text=display_text,
+                             fill="#FFFFFF", font=("Arial", 12, "bold"))
+            
+            # 显示标题
+            canvas.create_text(center_x, center_y - 40,
+                             text=title,
+                             fill="#FFFFFF", font=("Arial", 10))
+            
+        except Exception as e:
+            print(f"更新仪表盘失败: {e}")
+
+    def update_gauge_data(self, sensor_name, value_str):
+        """更新仪表盘数据"""
+        try:
+            config = self.panel_configs.get(sensor_name, {})
+            if not config.get("gauge"):
+                return
+                
+            if sensor_name == "aqi" and hasattr(self, 'gauge_aqi_canvas'):
                 try:
-                    # 移除所有非数字、非小数点的字符
-                    numeric_part = ''.join(c for c in data_value if c.isdigit() or c == '.')
-                    if numeric_part:
-                        float(numeric_part)  # 验证是否为有效数字
-                        cleaned_data = numeric_part
+                    value = int(float(value_str))
+                    max_value = config.get("gauge_max", 5)
+                    levels = config.get("levels")
+                    self.update_gauge(self.gauge_aqi_canvas, value, max_value, "AQI", levels)
                 except ValueError:
                     pass
+                    
+            elif sensor_name == "uv_risk" and hasattr(self, 'gauge_uv_risk_canvas'):
+                levels = config.get("levels", [])
+                if value_str in levels:
+                    level_value = levels.index(value_str)
+                    max_value = len(levels) - 1
+                    self.update_gauge(self.gauge_uv_risk_canvas, level_value, max_value, "UV风险", levels)
+                    
         except Exception as e:
-            print(f"警告: 处理数据值时出错: {e}")
+            print(f"更新仪表盘数据失败: {e}")
 
-        # 更新UI显示和数据存储
-        if panel_key and panel_key in self.data_vars:
-            # 确保数据值是字符串格式，适合StringVar显示
-            self.data_vars[panel_key].set(str(cleaned_data))
-            
-            # 添加单位显示和处理特殊面板
-            display_value = cleaned_data
-            if panel_key in self.panel_configs:
-                display_name = self.panel_configs[panel_key]['display_title']
-                unit = self.panel_configs[panel_key].get('unit', '')
-                logging.info(f"传感器更新: {display_name} = {display_value}{unit}")
-                
-                # 更新窗口标题，反映最新数据状态
-                if panel_key == "temp":                    
-                    self.root.title(f"{APP_TITLE} - 温度: {display_value}{unit}")
-                
-                # 更新AQI仪表盘
-                if panel_key == "aqi" and hasattr(self, 'aqi_value_label'):
-                    try:
-                        aqi_value = float(cleaned_data)
-                        self.aqi_value_label.config(text=str(cleaned_data))
-                        
-                        # 根据AQI值确定等级和颜色
-                        if aqi_value <= 50:
-                            level = "优"
-                            color = "#4CAF50"  # 绿色
-                            bg_color = "#E8F5E9"  # 浅绿色背景
-                            desc = "空气质量令人满意，基本无污染"
-                        elif aqi_value <= 100:
-                            level = "良"
-                            color = "#FFEB3B"  # 黄色
-                            bg_color = "#FFF9C4"  # 浅黄色背景
-                            desc = "空气质量可接受，敏感人群应减少户外活动"
-                        elif aqi_value <= 150:
-                            level = "轻度污染"
-                            color = "#FF9800"  # 橙色
-                            bg_color = "#FFE0B2"  # 浅橙色背景
-                            desc = "轻度污染，儿童等敏感人群应减少户外活动"
-                        elif aqi_value <= 200:
-                            level = "中度污染"
-                            color = "#F44336"  # 红色
-                            bg_color = "#FFCDD2"  # 浅红色背景
-                            desc = "中度污染，应减少户外活动"
-                        elif aqi_value <= 300:
-                            level = "重度污染"
-                            color = "#9C27B0"  # 紫色
-                            bg_color = "#E1BEE7"  # 浅紫色背景
-                            desc = "重度污染，应避免户外活动"
-                        else:
-                            level = "严重污染"
-                            color = "#880E4F"  # 深紫色
-                            bg_color = "#FCE4EC"  # 浅粉色背景
-                            desc = "严重污染，应停止户外活动"
-                            
-                        # 更新文本和颜色
-                        self.aqi_level_label.config(text=level, fg=color)
-                        self.aqi_value_label.config(fg=color)
-                        
-                        # 绘制高级圆形指示器
-                        if hasattr(self, 'aqi_indicator_canvas') and self.aqi_indicator_canvas:
-                            self.aqi_indicator_canvas.delete("all")  # 清除旧图形
-                            
-                            # 绘制渐变边缘效果的圆
-                            diameter = 40
-                            x0, y0 = 5, 5
-                            x1, y1 = x0 + diameter, y0 + diameter
-                            
-                            # 绘制外圈光晕效果
-                            glow_width = 3
-                            self.aqi_indicator_canvas.create_oval(
-                                x0-glow_width, y0-glow_width, 
-                                x1+glow_width, y1+glow_width, 
-                                fill="", outline=color, width=glow_width
-                            )
-                            
-                            # 绘制主圆
-                            self.aqi_indicator_canvas.create_oval(
-                                x0, y0, x1, y1, 
-                                fill=color, outline=""
-                            )
-                            
-                            # 添加等级文本，使用首字母
-                            self.aqi_indicator_canvas.create_text(
-                                x0 + diameter/2, y0 + diameter/2, 
-                                text=level[0], 
-                                fill="white", 
-                                font=("Helvetica", 16, "bold")
-                            )
-                        
-                        # 更新AQI描述标签
-                        if hasattr(self, 'aqi_desc_label') and self.aqi_desc_label:
-                            self.aqi_desc_label.config(text=desc)
-                    except ValueError:
-                        print(f"警告: AQI值 '{cleaned_data}' 无法转换为数字")
-                        pass
-                
-                # 更新UV风险等级仪表盘
-                if panel_key == "uv" and hasattr(self, 'uv_value_label'):
-                    # 先尝试显示数值
-                    try:
-                        uv_value = float(cleaned_data)
-                        self.uv_value_label.config(text=str(cleaned_data))
-                        
-                        # 根据UV值确定等级和颜色
-                        if uv_value <= 2:
-                            level = "低"
-                            color = "#4CAF50"  # 绿色
-                            bg_color = "#E8F5E9"  # 浅绿色背景
-                            desc = "安全，可以户外活动"
-                        elif uv_value <= 5:
-                            level = "中"
-                            color = "#FFEB3B"  # 黄色
-                            bg_color = "#FFF9C4"  # 浅黄色背景
-                            desc = "需要防晒，建议戴帽子、涂抹防晒霜"
-                        elif uv_value <= 7:
-                            level = "高"
-                            color = "#FF9800"  # 橙色
-                            bg_color = "#FFE0B2"  # 浅橙色背景
-                            desc = "需要防晒措施，中午时段应避免户外活动"
-                        elif uv_value <= 10:
-                            level = "很高"
-                            color = "#F44336"  # 红色
-                            bg_color = "#FFCDD2"  # 浅红色背景
-                            desc = "尽量避免户外活动，做好全面防护措施"
-                        else:
-                            level = "极高"
-                            color = "#9C27B0"  # 紫色
-                            bg_color = "#E1BEE7"  # 浅紫色背景
-                            desc = "禁止户外活动，有皮肤损伤风险"
-                            
-                        self.uv_level_label.config(text=level, fg=color)
-                        self.uv_value_label.config(fg=color)
-                        
-                        # 绘制进度条样式的指示器，增加视觉效果
-                        if hasattr(self, 'uv_indicator_canvas') and self.uv_indicator_canvas:
-                            self.uv_indicator_canvas.delete("all")  # 清除旧图形
-                            total_width = self.uv_indicator_canvas.winfo_width() or 150  # 默认宽度150
-                            
-                            # UV指数最高为11，计算进度
-                            progress = min(uv_value / 11.0, 1.0)
-                            indicator_width = int(total_width * progress)
-                            
-                            # 绘制背景条 - 更美观的圆角矩形
-                            bg_radius = 5  # 背景圆角半径
-                            self.uv_indicator_canvas.create_rectangle(
-                                0, 0, total_width, 20,
-                                fill="#E0E0E0", outline="",
-                                width=0, radius=bg_radius
-                            )
-                            
-                            # 绘制渐变进度条 - 从左到右颜色渐变
-                            if indicator_width > 0:
-                                # 在进度条区域创建圆角矩形
-                                progress_radius = 5  # 进度条圆角半径
-                                self.uv_indicator_canvas.create_rectangle(
-                                    0, 0, indicator_width, 20,
-                                    fill=color, outline="",
-                                    width=0, radius=progress_radius
-                                )
-                                
-                                # 添加高光效果
-                                highlight_height = 6
-                                self.uv_indicator_canvas.create_rectangle(
-                                    2, 2, indicator_width-2, highlight_height,
-                                    fill="#FFFFFF", outline="",
-                                    width=0, radius=2,
-                                    stipple="gray25"  # 半透明效果
-                                )
-                            
-                            # 添加刻度标记和标签
-                            for i in range(6):
-                                x_pos = int(total_width * i / 5)
-                                # 刻度线
-                                self.uv_indicator_canvas.create_line(
-                                    x_pos, 20, x_pos, 25, 
-                                    fill="#757575", width=1
-                                )
-                                # 刻度标签
-                                self.uv_indicator_canvas.create_text(
-                                    x_pos, 30, 
-                                    text=str(i*2), 
-                                    fill="#757575", 
-                                    font=("Helvetica", 8)
-                                )
-                            
-                            # 添加当前值标记
-                            current_x = int(total_width * progress)
-                            if current_x > 5 and current_x < total_width-5:  # 确保不会太靠边
-                                # 在进度条上方显示小三角形指示当前位置
-                                self.uv_indicator_canvas.create_polygon(
-                                    current_x-5, 0,
-                                    current_x+5, 0,
-                                    current_x, -8,
-                                    fill=color, outline="", 
-                                    width=0
-                                )
-                        
-                        # 更新UV描述标签
-                        if hasattr(self, 'uv_desc_label') and self.uv_desc_label:
-                            self.uv_desc_label.config(text=desc)
-                            
-                    except ValueError:
-                        # 如果是文本（如"中"），直接显示
-                        if cleaned_data in ["低", "中", "高", "很高", "极高"]:
-                            level = cleaned_data
-                            self.uv_value_label.config(text=level)
-                            
-                            # 设置颜色和描述
-                            if level == "低":
-                                color = "#4CAF50"  # 绿色
-                                desc = "安全，可以户外活动"
-                                uv_value = 1  # 为进度条设置大致数值
-                            elif level == "中":
-                                color = "#FFEB3B"  # 黄色
-                                desc = "需要防晒，建议戴帽子、涂抹防晒霜"
-                                uv_value = 4  # 为进度条设置大致数值
-                            elif level == "高":
-                                color = "#FF9800"  # 橙色
-                                desc = "需要防晒措施，中午时段应避免户外活动"
-                                uv_value = 6  # 为进度条设置大致数值
-                            elif level == "很高":
-                                color = "#F44336"  # 红色
-                                desc = "尽量避免户外活动，做好全面防护措施"
-                                uv_value = 9  # 为进度条设置大致数值
-                            else:  # 极高
-                                color = "#9C27B0"  # 紫色
-                                desc = "禁止户外活动，有皮肤损伤风险"
-                                uv_value = 11  # 为进度条设置大致数值
-                                
-                            self.uv_level_label.config(text=level, fg=color)
-                            self.uv_value_label.config(fg=color)
-                            
-                            # 更新UV描述标签和进度条
-                            if hasattr(self, 'uv_desc_label') and self.uv_desc_label:
-                                self.uv_desc_label.config(text=desc)
-                                
-                            # 绘制进度条，基于文本级别设置进度值
-                            if hasattr(self, 'uv_indicator_canvas') and self.uv_indicator_canvas:
-                                self.uv_indicator_canvas.delete("all")
-                                total_width = self.uv_indicator_canvas.winfo_width() or 150
-                                progress = min(uv_value / 11.0, 1.0)
-                                indicator_width = int(total_width * progress)
-                                
-                                # 与数值情况相同的进度条绘制代码
-                                bg_radius = 5
-                                self.uv_indicator_canvas.create_rectangle(
-                                    0, 0, total_width, 20,
-                                    fill="#E0E0E0", outline="",
-                                    width=0, radius=bg_radius
-                                )
-                                
-                                if indicator_width > 0:
-                                    progress_radius = 5
-                                    self.uv_indicator_canvas.create_rectangle(
-                                        0, 0, indicator_width, 20,
-                                        fill=color, outline="",
-                                        width=0, radius=progress_radius
-                                    )
-                                    
-                                    highlight_height = 6
-                                    self.uv_indicator_canvas.create_rectangle(
-                                        2, 2, indicator_width-2, highlight_height,
-                                        fill="#FFFFFF", outline="",
-                                        width=0, radius=2,
-                                        stipple="gray25"
-                                    )
-                                
-                                for i in range(6):
-                                    x_pos = int(total_width * i / 5)
-                                    self.uv_indicator_canvas.create_line(
-                                        x_pos, 20, x_pos, 25, 
-                                        fill="#757575", width=1
-                                    )
-                                    self.uv_indicator_canvas.create_text(
-                                        x_pos, 30, 
-                                        text=str(i*2), 
-                                        fill="#757575", 
-                                        font=("Helvetica", 8)
-                                    )
-                                
-                                current_x = int(total_width * progress)
-                                if current_x > 5 and current_x < total_width-5:
-                                    self.uv_indicator_canvas.create_polygon(
-                                        current_x-5, 0,
-                                        current_x+5, 0,
-                                        current_x, -8,
-                                        fill=color, outline="",
-                                        width=0
-                                    )
-                        
-    def toggle_simulation(self):
-        """切换是否使用模拟数据"""
-        print("DEBUG: toggle_simulation 方法被调用")
-        
-        # 使用实例变量而非全局变量
-        self.use_simulation = not self.use_simulation
-        
-        if self.use_simulation:
-            print("DEBUG: 启用模拟数据模式")
-            self.sim_button_text_var.set("关闭模拟数据")
-            # 更新状态显示
-            logging.info("已启用模拟数据模式")
-            if hasattr(self, 'connection_status_label_widget') and self.connection_status_label_widget:
-                self.connection_status_label_widget.config(text="状态: 使用模拟数据", fg=TEXT_COLOR_STATUS_SIM)
-            
-            # 更新所有传感器数据
-            for topic_key, value in simulation_data.items():
-                print(f"DEBUG: 正在模拟数据 - {topic_key}: {value}")
-                full_topic = f"siot/{topic_key}"
-                # 模拟消息格式
-                message = mqtt.MQTTMessage()
-                message.topic = full_topic.encode('utf-8')
-                message.payload = value.encode('utf-8')
-                # 直接调用消息处理函数
-                self.on_message(None, None, message)
-                
-            # 定期刷新模拟数据
-            self.root.after(5000, self.refresh_simulation_data)
-        else:
-            print("DEBUG: 关闭模拟数据模式")
-            self.sim_button_text_var.set("启用模拟数据")
-            logging.info("已关闭模拟数据模式")
-            # 尝试重新连接MQTT
-            self.connect_mqtt()
-    
-    def refresh_simulation_data(self):
-        """刷新模拟数据，使其数值稍有变化"""
-        print("DEBUG: refresh_simulation_data 方法被调用")
-        
-        # 使用实例变量而非全局变量
-        if not hasattr(self, 'use_simulation') or not self.use_simulation:
-            print("DEBUG: 模拟数据模式已关闭，不再刷新")
-            return  # 如果已关闭模拟模式，则不再刷新
-        
-        print("DEBUG: 正在刷新模拟数据...")
-        # 为一些数据增加一点随机变化
-        updated_data = {}
-        for key, value in simulation_data.items():
-            try:
-                # 尝试转换为浮点数并添加少量随机波动
-                num_value = float(value)
-                # 根据不同类型的数据设置不同的波动范围
-                if key == "环境温度":
-                    fluctuation = random.uniform(-0.3, 0.3)
-                elif key == "环境湿度":
-                    fluctuation = random.uniform(-1.0, 1.0)
-                elif key == "aqi":
-                    fluctuation = random.uniform(-2.0, 2.0)
-                elif key == "噪音":
-                    fluctuation = random.uniform(-1.5, 1.5)
-                else:
-                    fluctuation = random.uniform(-0.5, 0.5)
-                
-                # 更新值并转回字符串
-                new_value = num_value + fluctuation
-                updated_data[key] = f"{new_value:.1f}"
-                print(f"DEBUG: 模拟数据更新 - {key}: {value} -> {updated_data[key]}")
-            except ValueError:
-                # 如果不是数值，保持原样
-                updated_data[key] = value
-                print(f"DEBUG: 保持原样的非数值数据 - {key}: {value}")
-        
-        # 使用更新的数据
-        for topic_key, value in updated_data.items():
-            full_topic = f"siot/{topic_key}"
-            # 模拟消息格式
-            message = mqtt.MQTTMessage()
-            message.topic = full_topic.encode('utf-8')
-            message.payload = value.encode('utf-8')
-            # 直接调用消息处理函数
-            self.on_message(None, None, message)
-        
-        # 继续定期刷新
-        self.root.after(5000, self.refresh_simulation_data)
-
-# 清除所有现有内容，以确保代码没有重复
-# 添加主程序入口点
-if __name__ == "__main__":
-    print("DEBUG: __main__ 块已启动")
-    
-    # 尝试设置中文地区设置
-    original_locale_time = locale.getlocale(locale.LC_TIME)
-    try:
-        locale.setlocale(locale.LC_TIME, 'zh_CN.UTF-8')
-        print("DEBUG: 成功设置中文区域设置 zh_CN.UTF-8")
-    except locale.Error:
-        print("警告: 无法设置中文区域设置 (zh_CN.UTF-8)。尝试其他中文区域设置...")
+    def process_video_frame(self, payload):
+        """处理视频帧数据"""
         try:
-            locale.setlocale(locale.LC_TIME, 'Chinese_China.936') # Windows特定设置
-            print("DEBUG: 成功设置中文区域设置 Chinese_China.936")
-        except locale.Error:
-            print("警告: 无法设置 'Chinese_China.936'。星期几可能以默认语言显示。")
-            # 如果设置失败，恢复到原始设置
-            locale.setlocale(locale.LC_TIME, original_locale_time)
+            if not PIL_AVAILABLE:
+                return
+                
+            # 尝试解码base64数据
+            import base64
+            import io
+            from PIL import Image, ImageTk
+            
+            image_data = base64.b64decode(payload)
+            image = Image.open(io.BytesIO(image_data))
+            
+            # 调整图像大小
+            video_width = self.config.get("video", {}).get("width", 480)
+            video_height = self.config.get("video", {}).get("height", 360)
+            image = image.resize((video_width, video_height), Image.Resampling.LANCZOS)
+            
+            # 转换为PhotoImage
+            photo = ImageTk.PhotoImage(image)
+            
+            # 更新视频显示
+            if hasattr(self, 'camera_image_label') and self.camera_image_label:
+                self.camera_image_label.configure(image=photo)
+                self.camera_image_label.image = photo  # 保持引用
+                
+            print("视频帧更新成功")
+            
+        except Exception as e:
+            print(f"处理视频帧失败: {e}")
 
-    try:
-        print("DEBUG: 创建Tkinter根窗口...")
-        root = tk.Tk()
-        print("DEBUG: Tkinter根窗口创建成功")
-        root.geometry("1280x768") # 设置默认大小
-        root.configure(bg=PAGE_BG_COLOR)
-        
-        print("DEBUG: 初始化SmartCampusDashboard实例...")
-        app = SmartCampusDashboard(root) # 创建应用实例，处理包括MQTT在内的所有设置
-        
-        print("DEBUG: 启动Tkinter主循环...")
-        root.mainloop()
-        print("DEBUG: Tkinter主循环已结束。")
-    except Exception as e:
-        import traceback
-        print(f"ERROR: 应用程序运行时出错: {e}")
-        traceback.print_exc()
-        logging.error(f"应用程序启动失败: {e}", exc_info=True)
-    
-    # 恢复区域设置（如果更改了）
-    try:
-        locale.setlocale(locale.LC_TIME, original_locale_time)
-    except Exception:
-        pass # 忽略最终清理期间的错误
+# 启动应用程序的代码
+if __name__ == "__main__":
+    print("DEBUG: __main__ - ENTER")
+    root = tk.Tk()
+    app = SmartCampusDashboard(root)
+    root.mainloop()
+    print("DEBUG: __main__ - EXIT")

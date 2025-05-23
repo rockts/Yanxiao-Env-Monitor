@@ -18,7 +18,7 @@ import io
 import threading
 
 # --- MQTT配置 ---
-MQTT_BROKER_HOST = "192.168.1.129"  # 默认MQTT服务器地址
+MQTT_BROKER_HOST = "localhost"  # 默认MQTT服务器地址
 MQTT_BROKER_PORT = 1883  # 默认MQTT服务器端口
 MQTT_USERNAME = "siot"  # 默认用户名
 MQTT_PASSWORD = "dfrobot"  # 默认密码
@@ -38,7 +38,7 @@ SENSOR_TOPICS = {
 }
 
 # 摄像头主题
-CAMERA_TOPIC = "sc/camera/stream"
+CAMERA_TOPIC = "siot/摄像头"
 
 # 天气主题
 WEATHER_TOPIC = "sc/weather/data"

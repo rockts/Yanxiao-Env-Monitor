@@ -1,10 +1,22 @@
 {
   "mqtt": {
-    "broker_host": "localhost",
+    "broker_host": "192.168.1.129",
     "broker_port": 1883,
     "client_id": "smart_campus_dashboard",
     "username": "siot",
-    "password": "dfrobot"
+    "password": "dfrobot",
+    "topics": [
+      "siot/环境温度",
+      "siot/环境湿度",
+      "siot/aqi",
+      "siot/tvoc",
+      "siot/eco2",
+      "siot/紫外线指数",
+      "siot/uv风险等级",
+      "siot/噪音",
+      "sc/camera/stream",
+      "siot/摄像头"
+    ]
   },
   "logging": {
     "level": "INFO",

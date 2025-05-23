@@ -15,7 +15,7 @@ import platform
 
 # 获取脚本所在路径
 SCRIPT_PATH = Path(__file__).resolve()
-PROJECT_ROOT = SCRIPT_PATH.parent
+PROJECT_ROOT = SCRIPT_PATH.parent.parent # 由 SCRIPT_PATH.parent 修改为此
 SRC_PATH = PROJECT_ROOT / "src"
 
 print("=" * 60)
@@ -152,7 +152,8 @@ try:
     print("导入主模块...")
     
     # 检查main.py是否存在
-    main_py_path = SRC_PATH / "main.py"
+    # main_py_path = SRC_PATH / "main.py" # 旧的路径
+    main_py_path = PROJECT_ROOT / "dashboard.py" # 新的路径，指向 dashboard.py
     if not main_py_path.exists():
         raise FileNotFoundError(f"找不到主模块文件: {main_py_path}")
     
@@ -280,32 +281,32 @@ def patch_smart_campus_dashboard():
     
     # 在第一个方法之前插入我们的新方法
     patched_script = (
-        main_script[:first_method_pos] + 
+        main_script[:first_method_pos] +
         "\n    def update_connection_status_display(self, connected, status_text=None):\n" +
-        "        '''更新MQTT连接状态显示'''\n" +
-        "        try:\n" +
-        "            if hasattr(self, 'connection_status_var'):\n" +
-        "                status_msg = f\"状态: {'已连接' if connected else status_text if status_text else '未连接'}\"\n" +
-        "                self.connection_status_var.set(status_msg)\n" +
-        "                if hasattr(self, 'connection_status_label_widget') and self.connection_status_label_widget:\n" +
-        "                    color = TEXT_COLOR_STATUS_OK if connected else TEXT_COLOR_STATUS_FAIL\n" +
-        "                    self.connection_status_label_widget.config(text=status_msg, fg=color)\n" +
-        "        except Exception as e:\n" +
-        "            logging.error(f\"更新连接状态显示时出错: {e}\")\n" +
-        "            print(f\"ERROR: 更新连接状态显示时出错: {e}\")\n\n" +
+        "        '''更新MQTT连接状态显示'''\\n" +
+        "        try:\\n" +
+        "            if hasattr(self, 'connection_status_var'):\\n" +
+        "                status_msg = f\\\\\\\"状态: {'已连接' if connected else status_text if status_text else '未连接'}\\\\\\\"\\n" +
+        "                self.connection_status_var.set(status_msg)\\n" +
+        "                if hasattr(self, 'connection_status_label_widget') and self.connection_status_label_widget:\\n" +
+        "                    color = \\\\\\\"#33FF99\\\\\\\" if connected else \\\\\\\"#FF6666\\\\\\\"\\n" +
+        "                    self.connection_status_label_widget.config(text=status_msg, fg=color)\\n" +
+        "        except Exception as e:\\n" +
+        "            logging.error(f\\\\\\\"更新连接状态显示时出错: {e}\\\\\\\")\\n" +
+        "            print(f\\\\\\\"ERROR: 更新连接状态显示时出错: {e}\\\\\\\")\\n\n" +
         "    def on_closing(self):\n" +
-        "        '''当窗口关闭时的处理程序'''\n" +
-        "        logging.info(\"应用程序正在关闭\")\n" +
-        "        try:\n" +
-        "            if hasattr(self, 'mqtt_client') and self.mqtt_client:\n" +
-        "                self.mqtt_client.loop_stop()\n" +
-        "                self.mqtt_client.disconnect()\n" +
-        "                logging.info(\"MQTT客户端已断开连接\")\n" +
-        "        except Exception as e:\n" +
-        "            logging.error(f\"关闭MQTT连接时出错: {e}\")\n" +
-        "        finally:\n" +
-        "            self.root.destroy()\n" +
-        "            logging.info(\"应用程序已关闭\")\n\n" +
+        "        '''当窗口关闭时的处理程序'''\\n" +
+        "        logging.info(\\\\\\\"应用程序正在关闭\\\\\\\")\\n" +
+        "        try:\\n" +
+        "            if hasattr(self, 'mqtt_client') and self.mqtt_client:\\n" +
+        "                self.mqtt_client.loop_stop()\\n" +
+        "                self.mqtt_client.disconnect()\\n" +
+        "                logging.info(\\\\\\\"MQTT客户端已断开连接\\\\\\\")\\n" +
+        "        except Exception as e:\\n" +
+        "            logging.error(f\\\\\\\"关闭MQTT连接时出错: {e}\\\\\\\")\\n" +
+        "        finally:\\n" +
+        "            self.root.destroy()\\n" +
+        "            logging.info(\\\\\\\"应用程序已关闭\\\\\\\")\\n\n" +
         main_script[first_method_pos:]
     )
     
@@ -316,43 +317,48 @@ def patch_smart_campus_dashboard():
     
     print(f"已创建修补后的文件: {temp_file}")
     return str(temp_file)
+""" # 确保此行正确结束 fix_code 字符串，并位于第0列
 
-# 执行补丁
-patched_file = patch_smart_campus_dashboard()
+        # 执行修复代码 (定义 patch_smart_campus_dashboard 函数)
+        exec(fix_code.strip()) # 使用 strip() 移除可能存在的多余空白字符
+                
+        # 调用在 exec(fix_code) 中定义的函数
+        patched_file_path = None
+        try:
+            patched_file_path = patch_smart_campus_dashboard() # type: ignore
+        except NameError as e:
+            print(f"Error calling patch_smart_campus_dashboard: {e}")
+            print("This might be due to an issue in the fix_code definition or its execution.")
+            # 可以选择在这里退出或尝试运行原始 main.py
 
-# 执行修复代码
-exec(fix_code)
-        
-        # 获取patched_file变量
-        patched_file = locals().get('patched_file')
-        
-        if patched_file and os.path.exists(patched_file):
-            print(f"使用修补后的文件: {patched_file}")
+        if patched_file_path and os.path.exists(patched_file_path):
+            print(f"使用修补后的文件: {patched_file_path}")
             # 执行修补后的文件
-            with open(patched_file, 'r', encoding='utf-8') as f:
-                patched_content = f.read()
-            exec(patched_content)
+            try:
+                with open(patched_file_path, 'r', encoding='utf-8') as f:
+                    patched_content = f.read()
+                # 在全局作用域中执行，以便 main.py 中的类和函数可以被正确定义和访问
+                exec(patched_content, globals())
+            except Exception as e:
+                print(f"\\n执行修补后的文件 {patched_file_path} 时错误: {type(e).__name__}: {e}")
+                print("\\n详细错误信息:")
+                traceback.print_exc()
         else:
+            print(f"修补后的文件 {patched_file_path} 未找到或创建失败，尝试执行原始 main.py")
             # 如果补丁失败，尝试直接运行并捕获具体错误
             try:
                 with open(main_py_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                exec(content)
+                exec(content, globals())
             except Exception as e:
-                print(f"\n执行时错误: {type(e).__name__}: {e}")
-                print("\n详细错误信息:")
+                print(f"\\\\n执行原始 main.py 时错误: {type(e).__name__}: {e}")
+                print("\\\\n详细错误信息:")
                 traceback.print_exc()
-    
-    except AttributeError as ae:
-        print(f"\n错误: 可能是方法缺失 - {ae}")
-        print("\n详细错误信息:")
+    except Exception as e:
+        print(f"启动仪表盘时出错: {e}")
+        print("\\n详细错误信息:")
         traceback.print_exc()
-    
-except Exception as e:
-    print(f"启动仪表盘时出错: {e}")
-    print("\n详细错误信息:")
-    traceback.print_exc()
-    
+
 finally:
     # 关闭子进程
     if 'mqtt_process' in locals() and mqtt_process:
@@ -363,7 +369,7 @@ finally:
         simulator_process.terminate()
         print("传感器数据模拟器已关闭")
 
-print("\n=" * 30)
+print("\\n=" * 30)
 print("  智慧校园环境监测系统 - 会话已结束")
 print("=" * 30)
 print("按回车键退出...")

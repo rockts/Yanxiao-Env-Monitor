@@ -228,7 +228,7 @@ SENSOR_CONFIG = CONFIG.get("sensors", {
 class SmartCampusDashboard:
     """完整版校园环境监测仪表盘实现"""
     
-    def __init__(self, root):
+\n    def update_connection_status_display(self, connected, status_text=None):\n        '''更新MQTT连接状态显示'''\n        try:\n            if hasattr(self, 'connection_status_var'):\n                status_msg = f\"状态: {'已连接' if connected else status_text if status_text else '未连接'}\"\n                self.connection_status_var.set(status_msg)\n                if hasattr(self, 'connection_status_label_widget') and self.connection_status_label_widget:\n                    color = \"#33FF99\" if connected else \"#FF6666\"\n                    self.connection_status_label_widget.config(text=status_msg, fg=color)\n        except Exception as e:\n            logging.error(f\"更新连接状态显示时出错: {e}\")\n            print(f\"ERROR: 更新连接状态显示时出错: {e}\")\n\n    def on_closing(self):\n        '''当窗口关闭时的处理程序'''\n        logging.info(\"应用程序正在关闭\")\n        try:\n            if hasattr(self, 'mqtt_client') and self.mqtt_client:\n                self.mqtt_client.loop_stop()\n                self.mqtt_client.disconnect()\n                logging.info(\"MQTT客户端已断开连接\")\n        except Exception as e:\n            logging.error(f\"关闭MQTT连接时出错: {e}\")\n        finally:\n            self.root.destroy()\n            logging.info(\"应用程序已关闭\")\n\n    def __init__(self, root):
         """初始化仪表盘"""
         debug_print("进入 SmartCampusDashboard.__init__") # 新增调试语句
         self.root = root

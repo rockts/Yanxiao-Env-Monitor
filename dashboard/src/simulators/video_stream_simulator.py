@@ -20,7 +20,7 @@ import paho.mqtt.client as mqtt
 # 默认配置
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 1883
-DEFAULT_TOPIC = "sc/camera/stream"
+DEFAULT_TOPIC = "siot/摄像头"
 DEFAULT_FPS = 5  # 每秒发送帧数
 DEFAULT_WIDTH = 400
 DEFAULT_HEIGHT = 300
