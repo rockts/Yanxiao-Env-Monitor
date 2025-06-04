@@ -49,7 +49,6 @@ cd /path/to/Yanxiao-Env-Monitor/dashboard
 ./scripts/start_services.sh
 
 # 检查服务状态
-./scripts/check_status.sh
 ```
 
 ### 手动启动

@@ -1,0 +1,7 @@
+2025-05-21 23:09:37,719 [INFO] 智慧校园仪表盘启动
+2025-05-21 23:09:39,099 [WARNING] 配置文件不存在: /Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/config/config.json，使用默认配置
+2025-05-21 23:09:42,032 [ERROR] 应用程序启动失败: 'SmartCampusDashboard' object has no attribute 'on_closing'
+Traceback (most recent call last):
+  File "<string>", line 1757, in <module>
+  File "<string>", line 322, in __init__
+AttributeError: 'SmartCampusDashboard' object has no attribute 'on_closing'

@@ -1,0 +1,8 @@
+2025-05-21 23:17:08,012 [INFO] 智慧校园仪表盘启动
+2025-05-21 23:17:08,621 [WARNING] 配置文件不存在: /Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/config/config.json，使用默认配置
+2025-05-21 23:17:11,136 [INFO] 尝试连接MQTT服务器: 192.168.1.129:1883 (客户端ID: smart_campus_dashboard_client_001)
+2025-05-21 23:17:12,303 [ERROR] 应用程序启动失败: 'SmartCampusDashboard' object has no attribute 'fetch_weather_data_periodic'
+Traceback (most recent call last):
+  File "<string>", line 1782, in <module>
+  File "<string>", line 333, in __init__
+AttributeError: 'SmartCampusDashboard' object has no attribute 'fetch_weather_data_periodic'

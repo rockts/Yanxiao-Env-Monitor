@@ -1,41 +1,70 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
+.Python
 
 # Distribution / packaging
 build/
+develop-eggs/
 dist/
+downloads/
 eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
 *.egg
 
-# Virtual Environments
-.env
-.venv
-.venv-py312/
+# Virtual environments
 env/
+dashboard/env/
 venv/
 ENV/
+.venv/
+.venv-py312/
 
 # IDE / Editor specific
 .vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
+*.swp
+*.swo
 
-# macOS
+# OS
 .DS_Store
+Thumbs.db
 
 # Logs and databases
+logs/*.log
 *.log
 *.sqlite3
 *.sqlite3-journal
 
 # Temporary files
 *.tmp
+*.temp
 *.bak
-*.swp
+
+# Node modules (if any)
+node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Media files (optional)
+# *.mp4
+# *.avi
+# *.mov
+
+# Assets folder (images, design files, etc.)
+assets/
