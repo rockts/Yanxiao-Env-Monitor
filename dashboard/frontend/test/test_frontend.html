@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端数据测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .data-item {
+            margin: 5px 0;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .refresh-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+
+        .refresh-btn:hover {
+            background: #0056b3;
+        }
+
+        .camera-test {
+            max-width: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>环境监测系统前端数据测试</h1>
+
+        <button class="refresh-btn" onclick="testData()">刷新数据测试</button>
+
+        <div id="status" class="status info">正在初始化...</div>
+
+        <h2>传感器数据</h2>
+        <div id="sensorData"></div>
+
+        <h2>摄像头图像测试</h2>
+        <div id="cameraTest"></div>
+
+        <h2>API状态检查</h2>
+        <div id="apiStatus"></div>
+
+        <h2>错误日志</h2>
+        <div id="errorLog"></div>
+    </div>
+
+    <script>
+        const serverUrl = 'http://localhost:5051';
+        let testResults = [];
+
+        async function testData() {
+            const statusDiv = document.getElementById('status');
+            const sensorDiv = document.getElementById('sensorData');
+            const cameraDiv = document.getElementById('cameraTest');
+            const apiDiv = document.getElementById('apiStatus');
+            const errorDiv = document.getElementById('errorLog');
+
+            statusDiv.className = 'status info';
+            statusDiv.textContent = '正在测试数据获取...';
+
+            try {
+                // 测试基本数据获取
+                console.log('开始测试API调用...');
+                const response = await axios.get(`${serverUrl}/data`, { timeout: 5000 });
+
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ 数据获取成功！';
+
+                const data = response.data;
+                console.log('获取到的数据:', data);
+
+                // 显示传感器数据
+                sensorDiv.innerHTML = `
+                    <div class="data-item"><strong>温度:</strong> ${data.temperature}°C</div>
+                    <div class="data-item"><strong>湿度:</strong> ${data.humidity}%</div>
+                    <div class="data-item"><strong>AQI:</strong> ${data.aqi}</div>
+                    <div class="data-item"><strong>CO2:</strong> ${data.eco2} ppm</div>
+                    <div class="data-item"><strong>TVOC:</strong> ${data.tvoc} ppb</div>
+                    <div class="data-item"><strong>噪音:</strong> ${data.noise} dB</div>
+                    <div class="data-item"><strong>紫外线指数:</strong> ${data.uv_index}</div>
+                    <div class="data-item"><strong>紫外线原始值:</strong> ${data.uv_raw}</div>
+                `;
+
+                // 测试摄像头图像
+                if (data.camera && data.camera.length > 100) {
+                    cameraDiv.innerHTML = `
+                        <div class="status success">✅ 摄像头数据正常 (${data.camera.length} 字符)</div>
+                        <img src="${data.camera}" alt="摄像头图像" class="camera-test" 
+                             onerror="this.parentElement.innerHTML='❌ 图像显示失败'"
+                             onload="this.parentElement.insertAdjacentHTML('afterbegin', '<div class=\\'status success\\'>✅ 图像显示成功</div>')">
+                    `;
+                } else {
+                    cameraDiv.innerHTML = '<div class="status error">❌ 摄像头数据异常或为空</div>';
+                }
+
+                // API状态检查
+                apiDiv.innerHTML = `
+                    <div class="status success">✅ GET /data 端点正常</div>
+                    <div>响应时间: ${response.headers['x-response-time'] || '未知'}</div>
+                    <div>数据完整性: ${Object.keys(data).length} 个字段</div>
+                `;
+
+                // 测试AI建议API
+                testAISuggestion(data);
+
+            } catch (error) {
+                console.error('数据获取失败:', error);
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ 数据获取失败: ' + error.message;
+
+                errorDiv.innerHTML = `
+                    <div class="status error">
+                        <strong>错误详情:</strong><br>
+                        ${error.message}<br>
+                        <strong>错误类型:</strong> ${error.code || '未知'}<br>
+                        <strong>服务器URL:</strong> ${serverUrl}
+                    </div>
+                `;
+
+                // 尝试连接性测试
+                try {
+                    const healthCheck = await axios.get(`${serverUrl}/api/status`, { timeout: 3000 });
+                    apiDiv.innerHTML = `
+                        <div class="status success">✅ 服务器状态检查正常</div>
+                        <pre>${JSON.stringify(healthCheck.data, null, 2)}</pre>
+                    `;
+                } catch (healthError) {
+                    apiDiv.innerHTML = `
+                        <div class="status error">❌ 服务器状态检查失败: ${healthError.message}</div>
+                    `;
+                }
+            }
+        }
+
+        async function testAISuggestion(envData) {
+            try {
+                console.log('测试AI建议功能...');
+                const aiResponse = await axios.post(`${serverUrl}/api/ai_suggestion`, {
+                    aqi: envData.aqi,
+                    temperature: `室内温度${envData.temperature}℃`,
+                    humidity: envData.humidity,
+                    noise: envData.noise,
+                    eco2: envData.eco2,
+                    tvoc: envData.tvoc,
+                    type: 'indoor',
+                    scene: 'primary_school'
+                }, { timeout: 10000 });
+
+                document.getElementById('apiStatus').innerHTML += `
+                    <div class="status success">✅ AI建议API正常工作</div>
+                    <div><strong>AI建议:</strong> ${aiResponse.data.suggestion.substring(0, 100)}...</div>
+                `;
+            } catch (aiError) {
+                console.error('AI建议测试失败:', aiError);
+                document.getElementById('apiStatus').innerHTML += `
+                    <div class="status error">❌ AI建议API测试失败: ${aiError.message}</div>
+                `;
+            }
+        }
+
+        // 页面加载时自动测试
+        window.onload = function () {
+            testData();
+            // 每30秒自动刷新测试
+            setInterval(testData, 30000);
+        };
+
+        // 添加一些控制台日志以便调试
+        console.log('前端测试页面已加载');
+        console.log('服务器地址:', serverUrl);
+    </script>
+</body>
+
+</html>

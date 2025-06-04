@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>烟铺小学智慧环境监测物联网</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/echarts/dist/echarts.min.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
+            background: radial-gradient(circle at top left, #0d1a2d, #0a1220);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .header-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .main-title {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00eaff;
+            display: flex;
+            align-items: center;
+        }
+
+        .datetime {
+            font-size: 18px;
+            color: #ccc;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 350px 1fr 400px;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 120px);
+        }
+
+        .flex-column {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .card {
+            border-radius: 15px;
+            padding: 15px;
+            background-color: rgba(4, 47, 82, 0.8);
+            backdrop-filter: blur(5px);
+        }
+
+        .date-block {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .date-label {
+            font-size: 16px;
+            color: #ccc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #00eaff;
+        }
+
+        .date-unit {
+            font-size: 14px;
+            color: #999;
+            margin-left: 4px;
+        }
+
+        .video {
+            width: 100%;
+            height: 200px;
+            border-radius: 10px;
+            background: #1a1a2e;
+            object-fit: cover;
+        }
+
+        .chart {
+            width: 100%;
+            height: 150px;
+        }
+
+        .gauge-chart {
+            width: 180px;
+            height: 150px;
+        }
+
+        .gauge-row {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header-title">
+            <div class="main-title">
+                <img src="./img/logo_white.png" alt="logo" style="height: 80px; margin-right: 12px;">
+                烟铺小学智慧环境监测物联网
+            </div>
+            <div class="datetime">
+                {{ dateStr }} {{ now }}
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <!-- 左栏 -->
+            <div class="flex-column">
+                <div class="card">
+                    <div class="date-block">
+                        <span class="date-label">
+                            <span class="iconify" data-icon="mdi:thermometer-lines"
+                                style="font-size:24px;color:#ff7043;"></span>
+                            室外温度
+                        </span>
+                        <span>
+                            <span class="date-value">{{ formatInt(data.outdoor_temp) }}</span>
+                            <span class="date-unit">℃</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="date-block">
+                        <span class="date-label">
+                            <span class="iconify" data-icon="mdi:thermometer"
+                                style="font-size:24px;color:#ff7043;"></span>
+                            室内温度
+                        </span>
+                        <span>
+                            <span class="date-value">{{ formatInt(data.temperature) }}</span>
+                            <span class="date-unit">℃</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="date-block">
+                        <span class="date-label">
+                            <span class="iconify" data-icon="mdi:water-percent"
+                                style="font-size:24px;color:#42a5f5;"></span>
+                            湿度
+                        </span>
+                        <span>
+                            <span class="date-value">{{ formatInt(data.humidity) }}</span>
+                            <span class="date-unit">%</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="date-block">
+                        <span class="date-label">
+                            <span class="iconify" data-icon="mdi:volume-high"
+                                style="font-size:24px;color:#ffb300;"></span>
+                            噪音
+                        </span>
+                        <span>
+                            <span class="date-value">{{ formatInt(data.noise) }}</span>
+                            <span class="date-unit">dBA</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div style="margin-top:12px;display:flex;align-items:center;">
+                    <span style="font-size:18px;color:#aaa;">MQTT状态:</span>
+                    <span
+                        :style="{color: mqttStatus==='已连接' ? '#4caf50' : '#ff5252', fontWeight:'bold', marginLeft:'6px'}">
+                        {{ mqttStatus }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- 中栏 -->
+            <div class="flex-column">
+                <div style="display: flex; gap: 12px;">
+                    <div class="card" style="flex: 1;">
+                        <h3>视频监控</h3>
+                        <img v-if="data.camera && /\\.(jpg|jpeg|png|gif)(\\?.*)?$/i.test(data.camera)" class="video"
+                            :src="data.camera" alt="Camera Snapshot">
+                        <div v-else
+                            style="width:100%;height:200px;background:#1a1a2e;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                            <span style="color:#666;">暂无视频</span>
+                        </div>
+                    </div>
+
+                    <div class="card" style="flex: 1;">
+                        <h3>AI建议</h3>
+                        <div style="height:200px;overflow-y:auto;">
+                            <p style="margin:0;padding:10px;background:rgba(0,0,0,0.3);border-radius:5px;">
+                                {{ data.suggestion }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>空气质量监测</h3>
+                    <div class="gauge-row">
+                        <div class="gauge-chart" ref="aqiGauge"></div>
+                        <div class="gauge-chart" ref="uvGauge"></div>
+                        <div class="gauge-chart" ref="eco2Gauge"></div>
+                        <div class="gauge-chart" ref="tvocGauge"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右栏 -->
+            <div class="flex-column">
+                <div class="card" style="flex: 1;">
+                    <h3>环境数据趋势</h3>
+                    <div class="chart" ref="tempChart"></div>
+                    <div class="chart" ref="humiChart"></div>
+                    <div class="chart" ref="noiseChart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const now = ref('');
+                const dateStr = ref('');
+                const mqttStatus = ref('连接中...');
+
+                const data = reactive({
+                    temperature: '-', humidity: '-', aqi: 0, eco2: '-', tvoc: '-',
+                    uv_raw: '-', uv_index: 0, noise: '-', camera: '',
+                    suggestion: '获取中...', weather: '-', wind_dir: '-',
+                    outdoor_temp: '-', pm25: '-'
+                });
+
+                const weekMap = ['日', '一', '二', '三', '四', '五', '六'];
+
+                const updateTime = () => {
+                    const nowDate = new Date();
+                    dateStr.value = `${nowDate.getFullYear()}年${nowDate.getMonth() + 1}月${nowDate.getDate()}日 星期${weekMap[nowDate.getDay()]}`;
+                    now.value = nowDate.toLocaleTimeString('zh-CN', { hour12: false });
+                };
+
+                setInterval(updateTime, 1000);
+                updateTime();
+
+                // 图表引用
+                const tempChart = ref(null);
+                const humiChart = ref(null);
+                const noiseChart = ref(null);
+                const aqiGauge = ref(null);
+                const uvGauge = ref(null);
+                const eco2Gauge = ref(null);
+                const tvocGauge = ref(null);
+
+                // 获取数据
+                const fetchData = async () => {
+                    try {
+                        const response = await axios.get('http://localhost:5051/data', { timeout: 2000 });
+                        Object.assign(data, response.data);
+                        renderGauges();
+                        renderCharts();
+                    } catch (error) {
+                        console.error('获取数据失败:', error);
+                    }
+                };
+
+                // MQTT状态检查
+                const checkMqttStatus = async () => {
+                    try {
+                        const res = await axios.get('http://localhost:5051/api/status', { timeout: 2000 });
+                        mqttStatus.value = res.data?.mqtt_connected ? '已连接' : '未连接';
+                    } catch (e) {
+                        mqttStatus.value = '未连接';
+                    }
+                };
+
+                // 渲染仪表盘
+                const renderGauges = () => {
+                    if (aqiGauge.value) {
+                        const chart = echarts.init(aqiGauge.value);
+                        chart.setOption({
+                            series: [{
+                                type: 'gauge',
+                                data: [{ value: Number(data.aqi) }],
+                                title: { text: 'AQI' },
+                                detail: { formatter: '{value}' }
+                            }]
+                        });
+                    }
+                    // 其他仪表盘类似...
+                };
+
+                // 渲染图表
+                const renderCharts = () => {
+                    if (tempChart.value) {
+                        const chart = echarts.init(tempChart.value);
+                        chart.setOption({
+                            title: { text: '温度趋势', textStyle: { color: '#fff' } },
+                            xAxis: { type: 'category', data: ['12:00', '12:05', '12:10'] },
+                            yAxis: { type: 'value' },
+                            series: [{
+                                type: 'line',
+                                data: [Number(data.temperature), Number(data.temperature), Number(data.temperature)]
+                            }]
+                        });
+                    }
+                    // 其他图表类似...
+                };
+
+                const formatInt = (v) => {
+                    if (v === '-' || v === undefined || v === null || isNaN(Number(v))) return '--';
+                    return parseInt(Number(v));
+                };
+
+                onMounted(() => {
+                    fetchData();
+                    setInterval(fetchData, 3000);
+                    setInterval(checkMqttStatus, 3000);
+                });
+
+                return {
+                    now, dateStr, mqttStatus, data,
+                    tempChart, humiChart, noiseChart,
+                    aqiGauge, uvGauge, eco2Gauge, tvocGauge,
+                    formatInt
+                };
+            }
+        })
+            .use(ElementPlus)
+            .mount('#app');
+    </script>
+</body>
+
+</html>

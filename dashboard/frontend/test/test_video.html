@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频刷新测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .video-container {
+            border: 2px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            width: 400px;
+            height: 300px;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .info {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .controls {
+            margin: 20px 0;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <h1>视频刷新测试</h1>
+
+        <div class="info">
+            <strong>当前时间:</strong> {{ currentTime }}<br>
+            <strong>刷新时间戳:</strong> {{ refreshTimestamp }}<br>
+            <strong>摄像头数据类型:</strong> {{ cameraType }}<br>
+            <strong>摄像头数据长度:</strong> {{ cameraDataLength }}<br>
+            <strong>视频URL:</strong> {{ videoUrlPreview }}
+        </div>
+
+        <div class="controls">
+            <button @click="fetchCameraData">获取摄像头数据</button>
+            <button @click="forceRefresh">强制刷新</button>
+            <button @click="toggleAutoRefresh">{{ autoRefresh ? '停止自动刷新' : '开始自动刷新' }}</button>
+        </div>
+
+        <div class="video-container">
+            <img v-if="cameraUrl" :src="cameraUrl" :key="refreshTimestamp" alt="摄像头画面" @load="onImageLoad"
+                @error="onImageError">
+            <div v-else
+                style="display: flex; align-items: center; justify-content: center; height: 100%; background: #666;">
+                暂无摄像头数据
+            </div>
+        </div>
+
+        <div class="info">
+            <strong>加载状态:</strong> {{ loadStatus }}<br>
+            <strong>错误信息:</strong> {{ errorMessage }}
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentTime = ref('');
+                const refreshTimestamp = ref(Date.now());
+                const cameraData = ref('');
+                const autoRefresh = ref(false);
+                const loadStatus = ref('未加载');
+                const errorMessage = ref('');
+
+                let refreshTimer = null;
+
+                const cameraType = computed(() => {
+                    if (!cameraData.value) return '无数据';
+                    if (cameraData.value.startsWith('data:image')) return 'Base64图片';
+                    if (cameraData.value.startsWith('http')) return 'HTTP URL';
+                    return '未知类型';
+                });
+
+                const cameraDataLength = computed(() => {
+                    return cameraData.value ? cameraData.value.length : 0;
+                });
+
+                const videoUrlPreview = computed(() => {
+                    if (!cameraData.value) return '';
+                    if (cameraData.value.length > 100) {
+                        return cameraData.value.substring(0, 100) + '...';
+                    }
+                    return cameraData.value;
+                });
+
+                const cameraUrl = computed(() => {
+                    if (!cameraData.value) return '';
+
+                    // 对于base64图片，引用refreshTimestamp以触发响应式更新
+                    if (cameraData.value.startsWith('data:image')) {
+                        const timestamp = refreshTimestamp.value; // 触发响应式更新
+                        return cameraData.value;
+                    }
+
+                    // 对于HTTP URL，添加时间戳参数
+                    if (cameraData.value.startsWith('http')) {
+                        const separator = cameraData.value.includes('?') ? '&' : '?';
+                        return `${cameraData.value}${separator}t=${refreshTimestamp.value}`;
+                    }
+
+                    return cameraData.value;
+                });
+
+                const updateTime = () => {
+                    currentTime.value = new Date().toLocaleString();
+                };
+
+                const fetchCameraData = async () => {
+                    try {
+                        loadStatus.value = '加载中...';
+                        errorMessage.value = '';
+
+                        const response = await axios.get('http://localhost:5051/data');
+                        cameraData.value = response.data.camera || '';
+                        refreshTimestamp.value = Date.now();
+
+                        loadStatus.value = '加载成功';
+                        console.log('摄像头数据更新:', {
+                            type: cameraType.value,
+                            length: cameraDataLength.value,
+                            timestamp: refreshTimestamp.value
+                        });
+                    } catch (error) {
+                        console.error('获取数据失败:', error);
+                        errorMessage.value = error.message;
+                        loadStatus.value = '加载失败';
+                    }
+                };
+
+                const forceRefresh = () => {
+                    refreshTimestamp.value = Date.now();
+                    console.log('强制刷新, 新时间戳:', refreshTimestamp.value);
+                };
+
+                const toggleAutoRefresh = () => {
+                    autoRefresh.value = !autoRefresh.value;
+
+                    if (autoRefresh.value) {
+                        refreshTimer = setInterval(() => {
+                            fetchCameraData();
+                        }, 3000);
+                        console.log('开始自动刷新');
+                    } else {
+                        if (refreshTimer) {
+                            clearInterval(refreshTimer);
+                            refreshTimer = null;
+                        }
+                        console.log('停止自动刷新');
+                    }
+                };
+
+                const onImageLoad = () => {
+                    loadStatus.value = '图片加载成功';
+                    errorMessage.value = '';
+                    console.log('图片加载成功');
+                };
+
+                const onImageError = (event) => {
+                    loadStatus.value = '图片加载失败';
+                    errorMessage.value = '图片加载失败';
+                    console.error('图片加载失败:', event);
+                };
+
+                onMounted(() => {
+                    // 更新时间
+                    setInterval(updateTime, 1000);
+                    updateTime();
+
+                    // 初始加载
+                    fetchCameraData();
+                });
+
+                onUnmounted(() => {
+                    if (refreshTimer) {
+                        clearInterval(refreshTimer);
+                    }
+                });
+
+                return {
+                    currentTime,
+                    refreshTimestamp,
+                    cameraType,
+                    cameraDataLength,
+                    videoUrlPreview,
+                    cameraUrl,
+                    autoRefresh,
+                    loadStatus,
+                    errorMessage,
+                    fetchCameraData,
+                    forceRefresh,
+                    toggleAutoRefresh,
+                    onImageLoad,
+                    onImageError
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

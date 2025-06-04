@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>调试页面</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #16213e;
+            padding: 20px;
+            margin: 10px;
+            border-radius: 10px;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4fc3f7;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>烟铺小学智慧环境监测 - 调试版</h1>
+            <p>当前时间: {{ now }}</p>
+            <p>连接状态: {{ status }}</p>
+
+            <div class="data-grid">
+                <div class="card">
+                    <h3>室内温度</h3>
+                    <div class="value">{{ data.temperature }}℃</div>
+                </div>
+                <div class="card">
+                    <h3>湿度</h3>
+                    <div class="value">{{ data.humidity }}%</div>
+                </div>
+                <div class="card">
+                    <h3>空气质量</h3>
+                    <div class="value">{{ data.aqi }}</div>
+                </div>
+                <div class="card">
+                    <h3>噪音</h3>
+                    <div class="value">{{ data.noise }} dBA</div>
+                </div>
+                <div class="card">
+                    <h3>eCO₂</h3>
+                    <div class="value">{{ data.eco2 }} ppm</div>
+                </div>
+                <div class="card">
+                    <h3>TVOC</h3>
+                    <div class="value">{{ data.tvoc }} ppb</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const now = ref('');
+                const status = ref('连接中...');
+                const data = reactive({
+                    temperature: '--',
+                    humidity: '--',
+                    aqi: '--',
+                    noise: '--',
+                    eco2: '--',
+                    tvoc: '--'
+                });
+
+                // 更新时间
+                const updateTime = () => {
+                    now.value = new Date().toLocaleTimeString('zh-CN');
+                };
+                setInterval(updateTime, 1000);
+                updateTime();
+
+                // 获取数据
+                const fetchData = async () => {
+                    try {
+                        const response = await axios.get('http://localhost:5051/data', { timeout: 2000 });
+                        Object.assign(data, response.data);
+                        status.value = '已连接';
+                    } catch (error) {
+                        console.error('获取数据失败:', error);
+                        status.value = '连接失败';
+                    }
+                };
+
+                // 定时获取数据
+                setInterval(fetchData, 3000);
+                fetchData();
+
+                return { now, status, data };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

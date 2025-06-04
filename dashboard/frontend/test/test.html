@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>测试页面</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-plus"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css" />
+</head>
+
+<body>
+    <div id="app">
+        <h1>{{ message }}</h1>
+        <p>当前时间: {{ now }}</p>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+        createApp({
+            setup() {
+                const message = ref('Hello Vue!');
+                const now = ref(new Date().toLocaleTimeString());
+
+                setInterval(() => {
+                    now.value = new Date().toLocaleTimeString();
+                }, 1000);
+
+                return { message, now };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
