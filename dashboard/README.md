@@ -147,6 +147,7 @@ dashboard/
 ## Git 多电脑同步管理
 
 ### 快速同步
+
 ```bash
 # 快速提交并同步当前更改
 ./scripts/quick_sync.sh "更新描述"
@@ -156,6 +157,7 @@ dashboard/
 ```
 
 ### 完整同步工具
+
 ```bash
 # 运行交互式同步工具
 ./scripts/git_sync_tool.sh
@@ -164,17 +166,20 @@ dashboard/
 ### 同步方法选择
 
 1. **远程仓库同步（推荐）**
-   - 在GitHub/GitLab/Gitee创建仓库
+
+   - 在 GitHub/GitLab/Gitee 创建仓库
    - 使用脚本添加远程仓库
    - 自动推送拉取同步
 
-2. **Bundle文件同步**
+2. **Bundle 文件同步**
    - 适合私有项目或无网络环境
-   - 自动创建bundle文件
-   - 通过云盘分享bundle实现同步
+   - 自动创建 bundle 文件
+   - 通过云盘分享 bundle 实现同步
 
 ### 同步配置
+
 编辑 `scripts/sync_config.json` 配置同步参数：
+
 - 同步方法（remote/bundle）
 - 自动提交设置
 - 忽略文件模式

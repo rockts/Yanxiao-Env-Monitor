@@ -3,7 +3,7 @@
 # 烟小智慧环境监测系统 - 服务启动脚本
 # Start Services Script for Smart Environment Monitoring System
 
-PROJECT_DIR="/Users/gaopeng/SynologyDrive/Drive/Yanxiao-Env-Monitor/dashboard"
+PROJECT_DIR="/Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/dashboard"
 
 echo "🚀 启动烟小智慧环境监测系统服务..."
 

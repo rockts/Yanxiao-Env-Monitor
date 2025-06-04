@@ -1,39 +1,39 @@
 {
-  "project_name": "烟小智慧环境监测物联网",
-  "sync_config": {
-    "method": "bundle",
-    "auto_commit": true,
-    "default_commit_message": "自动同步提交",
-    "bundle_path": "../bundles/",
-    "remote_url": "",
-    "main_branch": "feature/data-acquisition"
-  },
-  "computers": {
-    "main": {
-      "name": "主开发机",
-      "is_primary": true,
-      "can_push": true,
-      "auto_sync": true
+    "project_name": "烟小智慧环境监测物联网",
+    "sync_config": {
+        "method": "bundle",
+        "auto_commit": true,
+        "default_commit_message": "自动同步提交",
+        "bundle_path": "../bundles/",
+        "remote_url": "",
+        "main_branch": "feature/data-acquisition"
     },
-    "secondary": {
-      "name": "备用机",
-      "is_primary": false,
-      "can_push": false,
-      "auto_sync": false
+    "computers": {
+        "main": {
+            "name": "主开发机",
+            "is_primary": true,
+            "can_push": true,
+            "auto_sync": true
+        },
+        "secondary": {
+            "name": "备用机",
+            "is_primary": false,
+            "can_push": false,
+            "auto_sync": false
+        }
+    },
+    "ignore_patterns": [
+        "*.log",
+        "__pycache__/",
+        ".DS_Store",
+        "*.pyc",
+        ".venv/",
+        "env/",
+        "logs/",
+        "*.mpdb"
+    ],
+    "sync_schedule": {
+        "auto_sync_interval": "30m",
+        "backup_interval": "1d"
     }
-  },
-  "ignore_patterns": [
-    "*.log",
-    "__pycache__/",
-    ".DS_Store",
-    "*.pyc",
-    ".venv/",
-    "env/",
-    "logs/",
-    "*.mpdb"
-  ],
-  "sync_schedule": {
-    "auto_sync_interval": "30m",
-    "backup_interval": "1d"
-  }
 }

@@ -27,7 +27,7 @@ latest_data = {
     "suggestion": "Getting suggestions..."
 }
 
-MQTT_BROKER = "192.168.0.102"
+MQTT_BROKER = "192.168.1.128"
 MQTT_PORT = 1883
 MQTT_USERNAME = "siot"
 MQTT_PASSWORD = "dfrobot"
@@ -167,4 +167,4 @@ def api_status():
     return jsonify({"mqtt_connected": mqtt_connected})
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5051, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=5052, debug=False, threaded=True)

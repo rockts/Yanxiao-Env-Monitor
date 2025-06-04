@@ -575,7 +575,7 @@
                     <el-form-item label="服务器IP地址:">
                         <el-input v-model="serverConfigForm.serverIp" placeholder="例如: 192.168.1.100" />
                         <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                            留空则使用当前主机地址，端口固定为5051
+                            留空则使用当前主机地址，端口固定为5052
                         </div>
                     </el-form-item>
                 </el-form>
@@ -622,18 +622,18 @@
                     const urlParams = new URLSearchParams(window.location.search);
                     const serverParam = urlParams.get('server');
                     if (serverParam) {
-                        return `http://${serverParam}:5051`;
+                        return `http://${serverParam}:5052`;
                     }
 
                     // 从localStorage读取保存的服务器地址
                     const savedServer = localStorage.getItem('env-monitor-server');
                     if (savedServer) {
-                        return `http://${savedServer}:5051`;
+                        return `http://${savedServer}:5052`;
                     }
 
                     // 默认使用当前主机地址（这样可以自动适应局域网访问）
                     const currentHost = window.location.hostname;
-                    return `http://${currentHost}:5051`;
+                    return `http://${currentHost}:5052`;
                 };
 
                 const serverUrl = getServerUrl();
@@ -1477,7 +1477,7 @@
                     const newIp = serverConfigForm.value.serverIp.trim();
                     if (newIp) {
                         localStorage.setItem('env-monitor-server', newIp);
-                        const newUrl = `http://${newIp}:5051`;
+                        const newUrl = `http://${newIp}:5052`;
                         console.log('保存新的服务器地址:', newUrl);
                     } else {
                         localStorage.removeItem('env-monitor-server');
