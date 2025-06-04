@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>烟铺小学智慧环境监测物联网</title>
+    <meta name="viewport" content="width=1920, initial-scale=1.0" />
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/echarts/dist/echarts.min.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue/dist/index.iife.min.js"></script>
+    <script src="https://unpkg.com/particles.js"></script>
+    <!-- 引入Iconify CDN -->
+    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <style>
+        /* 针对1920×1080显示器优化 */
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
+            background: radial-gradient(circle at top left, #0d1a2d, #0a1220);
+            color: #fff;
+            overflow: hidden;
+            zoom: 1.0;
+            /* 固定缩放比例 */
+        }
+
+
+
+        /* 优化标题区域高度 - 针对1920×1080 */
+        .header-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 80px;
+            /* 固定高度 */
+            margin-bottom: 0;
+            gap: 20px;
+            max-width: 100vw;
+            overflow: hidden;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+
+        .header-title .main-title {
+            display: flex;
+            align-items: center;
+            font-size: 42px;
+            /* 固定字体大小 */
+            font-weight: bold;
+            color: #ffffff;
+            min-width: 200px;
+            flex-shrink: 0;
+            padding-top: 8px;
+        }
+
+        .header-title .main-title img {
+            height: 70px;
+            /* 固定图片大小 */
+            vertical-align: middle;
+            margin-right: 12px;
+        }
+
+        /* 优化dashboard网格布局 - 针对1920×1080 */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 0.75fr 2.8fr 1.1fr;
+            grid-template-rows: 1fr;
+            height: calc(100vh - 90px);
+            /* 固定高度计算 */
+            padding: 10px;
+            /* 固定内边距 */
+            margin: 5px auto;
+            gap: 8px;
+            /* 固定间距 */
+            max-width: 100vw;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        /* 优化卡片样式 */
+        .card {
+            border-radius: 12px;
+            padding: 10px;
+            background-color: rgba(4, 47, 82, 0.95);
+            backdrop-filter: blur(3px);
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+
+        /* 优化左栏环境数据显示 */
+        .date-block {
+            display: flex;
+            height: 65px;
+            /* 固定高度 */
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 8px;
+        }
+
+        .date-label {
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+            /* 固定字体 */
+            color: #fff;
+            gap: 8px;
+            font-weight: bold;
+        }
+
+        .date-value {
+            font-size: 24px;
+            /* 固定字体 */
+            color: #fff200c6;
+            font-weight: bold;
+            margin-right: 4px;
+        }
+
+        .date-unit {
+            font-size: 14px;
+            /* 固定字体 */
+            color: #e0f7fa;
+            margin-left: 2px;
+        }
+
+        /* 优化仪表盘尺寸 - 针对1920×1080 */
+        .gauge-chart {
+            width: 200px;
+            /* 固定尺寸 */
+            height: 200px;
+            margin: 3px;
+        }
+
+        .gauge-row {
+            display: flex;
+            justify-content: space-around;
+            gap: 15px;
+
+            margin: 5px 0;
+        }
+
+        /* 优化视频监控区域 - 针对1920×1080 */
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            height: 420px;
+            /* 固定高度 */
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 优化图表高度 - 针对1920×1080 */
+        .chart {
+            width: 100%;
+            height: 220px;
+            /* 固定高度 */
+            margin: 6px 0;
+        }
+
+        /* MQTT状态移到右下角 - 更新样式 */
+        .mqtt-status-fixed {
+            position: fixed;
+            right: 20px;
+            bottom: 10px;
+            z-index: 999;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 10px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .mqtt-status-fixed:hover {
+            background: rgba(0, 0, 0, 0.9);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .mqtt-status-label {
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .mqtt-status-value {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.3s;
+        }
+
+        /* 连接状态的颜色 */
+        .mqtt-connected {
+            color: #4caf50;
+        }
+
+        .mqtt-disconnected {
+            color: #ff5252;
+        }
+
+        .mqtt-connecting {
+            color: #aaa;
+        }
+
+        /* 版权信息移到左下角 */
+        .copyright {
+            position: fixed;
+            left: 20px;
+            bottom: 10px;
+            z-index: 999;
+            font-size: 16px;
+            color: #ffeaea;
+            letter-spacing: 1px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .header-info-bar {
+            margin-top: 4px;
+            font-size: 16px;
+            /* 从14px增加到16px */
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+        }
+
+        /* 优化flex-column间距 */
+        .dashboard .flex-column {
+            gap: 8px !important;
+            /* 从10px减少到8px */
+        }
+
+        /* 优化AI建议区域 - 使用响应式设计 */
+        .ai-suggestion-html {
+            margin: 0 5px;
+            color: #fff;
+            text-align: left;
+            font-size: clamp(14px, 1.2vw, 16px);
+            /* 响应式字体 */
+            line-height: 1.4;
+            word-break: break-all;
+            padding: 5px;
+            box-sizing: border-box;
+            min-height: clamp(40px, 4vh, 45px);
+            /* 响应式高度 */
+            background: rgba(0, 0, 0, 0.10);
+            border-radius: 8px;
+        }
+
+        /* 优化仪表盘标签 - 使用响应式设计 */
+        .gauge-title {
+            font-size: clamp(16px, 1.4vw, 18px);
+            /* 响应式字体 */
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 3px;
+        }
+
+        .gauge-level {
+            font-size: clamp(14px, 1.2vw, 16px);
+            /* 响应式字体 */
+            font-weight: 500;
+        }
+
+        /* 优化日期时间显示 - 使用响应式字体 */
+        .datetime {
+            font-size: clamp(16px, 1.5vw, 18px);
+            color: #00eaff;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+
+<body>
+    <div id="particles-js"></div>
+
+    <div id="app">
+        <div class="header-title">
+            <div class="main-title">
+                <img src="./frontend/assets/img/logo_white.png" alt="logo"
+                    style="height: 80px; vertical-align: middle; margin-right: 12px;">
+                烟铺小学智慧环境监测物联网
+            </div>
+            <div class="datetime">
+                <i class="el-icon-date" style="color:#00eaff;margin-right:5px;"></i>{{ dateStr }} {{ now }}
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <!-- 左栏：环境数据卡片 -->
+            <div class="flex-column">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div class="card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:thermometer-lines"
+                                    style="font-size:32px;color:#ff7043;"></span>室外温度</span>
+                            <span><span class="date-value">{{ formatInt(data.outdoor_temp) }}</span><span
+                                    class="date-unit">℃</span></span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:blur"
+                                    style="font-size:32px;color:#bdbdbd;"></span>PM2.5</span>
+                            <span><span class="date-value">{{ formatInt(data.pm25) }}</span><span
+                                    class="date-unit">μg/m³</span></span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:weather-partly-cloudy"
+                                    style="font-size:32px;color:#ffd700;"></span>天气</span>
+                            <span><span class="date-value">{{ data.weather }}</span></span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:compass"
+                                    style="font-size:32px;color:#00eaff;"></span>风向</span>
+                            <span><span class="date-value">{{ data.wind_dir }}</span></span>
+                        </div>
+                    </div>
+                    <div class=" card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:thermometer"
+                                    style="font-size:32px;color:#ff7043;"></span>室内温度</span>
+                            <span><span class="date-value">{{ formatInt(data.temperature) }}</span><span
+                                    class="date-unit">℃</span></span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:water-percent"
+                                    style="font-size:32px;color:#42a5f5;"></span>室内湿度</span>
+                            <span><span class="date-value">{{ formatInt(data.humidity) }}</span><span
+                                    class="date-unit">%</span></span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:weather-sunny-alert"
+                                    style="font-size:32px;color:#ffd600;"></span>紫外线指数</span>
+                            <span><span class="date-value">{{ formatInt(data.uv_raw) }}</span></span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="date-block">
+                            <span class="date-label"><span class="iconify" data-icon="mdi:volume-high"
+                                    style="font-size:32px;color:#ffb300;"></span>噪音</span>
+                            <span><span class="date-value">{{ formatInt(data.noise) }}</span><span
+                                    class="date-unit">dBA</span></span>
+                        </div>
+                    </div>
+                    <!-- mqtt状态和版本信息保留在下方 -->
+                    <div class="mqtt-status-fixed">
+                        <span style="font-size:16px;color:#aaa;">MQTT状态:</span>
+                        <span
+                            :style="{color: mqttStatus==='已连接' ? '#4caf50' : (mqttStatus.startsWith('未连接') ? '#ff5252' : '#aaa'),fontWeight:'bold',marginLeft:'6px',display:'flex',alignItems:'center',transition:'color 0.3s'}">
+                            <el-icon v-if="mqttStatus==='已连接'">
+                                <component :is="CircleCheckFilled" />
+                            </el-icon>
+                            <el-icon v-else-if="mqttStatus.startsWith('未连接')">
+                                <component :is="WarningFilled" />
+                            </el-icon>
+                            <el-icon v-else style="color:#aaa;font-size:20px;margin-right:4px;">
+                                <component :is="Loading" />
+                            </el-icon>
+                            {{ mqttStatus }}
+                        </span>
+                        <!-- 配置按钮 -->
+                        <el-button @click="showServerConfig = true" size="small"
+                            style="margin-left: 10px; background: rgba(255,255,255,0.1); border: none; color: #aaa;">
+                            <el-icon>
+                                <component :is="Setting" />
+                            </el-icon>
+                        </el-button>
+                    </div>
+                    <div class="copyright">
+                        Powered by 烟铺小学智慧环境监测物联网 &copy; 2025 | Copilot前端优化版
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中栏：视频监控和AI建议 + 4个等级仪表盘 -->
+            <div class="flex-column">
+                <!-- 第一行：视频监控和AI建议 -->
+                <div style="display: flex; gap: 12px; flex: 0 0 auto;">
+                    <div class="card" style="flex: 1 1 0;">
+                        <div style="display: flex; flex-direction: column; height: 100%;">
+                            <div
+                                style="flex: 1 1 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 12px;">
+                                <div class="video-wrapper" style="position: relative;">
+                                    <!-- 视频标题放在视频框内 -->
+                                    <div
+                                        style="position: absolute; top: 10px; left: 15px; z-index: 3; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px;">
+                                        <span style="font-size: 16px; color: #fff; font-weight: bold;">视频监控</span>
+                                    </div>
+
+                                    <!-- MJPEG流视频 -->
+                                    <img v-if="data.camera && data.camera.includes('mjpeg')" :src="data.camera"
+                                        alt="实时视频流"
+                                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 14px;"
+                                        @error="handleVideoError" @load="handleVideoLoad">
+
+                                    <!-- 静态图片定时刷新 -->
+                                    <img v-else-if="data.camera && (data.camera.startsWith('http') || data.camera.startsWith('data:image'))"
+                                        :src="cameraUrlWithTimestamp" :key="refreshTimestamp" alt="摄像头快照"
+                                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 14px;"
+                                        @error="handleImageError" @load="handleImageLoad">
+
+                                    <!-- 无视频信号 -->
+                                    <div v-else
+                                        style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                                        <span class="iconify" data-icon="mdi:video-off"
+                                            style="font-size: 80px; color: #666;"></span>
+                                        <div style="color: #aaa; margin-top: 10px; font-size: 14px;">
+                                            暂无视频信号
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card" style="flex: 1 1 0;">
+                        <div class="header-info-bar">
+                            <div
+                                style="display: flex; align-items: center; gap: 8px; justify-content: space-between; width: 100%;">
+                                <span style="font-size: 18px; color: #fff; font-weight: bold;">AI建议</span>
+                                <el-button @click="refreshAISuggestion" size="small"
+                                    style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 4px 8px;"
+                                    :loading="aiRefreshing">
+                                    <el-icon>
+                                        <component :is="Refresh" />
+                                    </el-icon>
+                                </el-button>
+                            </div>
+                        </div>
+                        <div style="padding: 12px 10px; display: flex; flex-direction: column; gap: 15px;">
+                            <!-- 室内建议 -->
+                            <div>
+                                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                    <span class="iconify" data-icon="mdi:home"
+                                        style="font-size: 18px; color: #4fc3f7; margin-right: 6px;"></span>
+                                    <span style="font-size: 14px; font-weight: bold; color: #4fc3f7;">室内环境建议</span>
+                                </div>
+                                <div class="ai-suggestion-html" v-html="data.suggestionIndoorHtml"
+                                    style="min-height: 50px;">
+                                    {{ data.suggestionIndoor }}
+                                </div>
+                            </div>
+                            <!-- 室外建议 -->
+                            <div>
+                                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                    <span class="iconify" data-icon="mdi:weather-partly-cloudy"
+                                        style="font-size: 18px; color: #66bb6a; margin-right: 6px;"></span>
+                                    <span style="font-size: 14px; font-weight: bold; color: #66bb6a;">室外环境建议</span>
+                                </div>
+                                <div class="ai-suggestion-html" v-html="data.suggestionOutdoorHtml"
+                                    style="min-height: 50px;">
+                                    {{ data.suggestionOutdoor }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第二行：4个等级仪表盘（一行排列）+ 数据名称和等级 -->
+                <div class="card" style="flex: 0 0 auto;">
+                    <div class="header-info-bar">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 18px; color: #fff; font-weight: bold;">空气质量</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 12px;">
+                        <div class="gauge-row" style="display: flex; justify-content: space-around; gap: 18px;">
+                            <!-- AQI仪表盘 -->
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <div class="gauge-chart" ref="aqiGauge"></div>
+                                <div style="text-align: center; ">
+                                    <div style="font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 4px;">
+                                        AQI
+                                    </div>
+                                    <div style="font-size: 14px; color: #4fc3f7;">{{ aqiLevelText }}</div>
+                                </div>
+                            </div>
+
+                            <!-- UV仪表盘 -->
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <div class="gauge-chart" ref="uvGauge"></div>
+                                <div style="text-align: center; ">
+                                    <div style="font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 4px;">
+                                        紫外线
+                                    </div>
+                                    <div style="font-size: 14px; color: #66bb6a;">{{ uvLevelText }}</div>
+                                </div>
+                            </div>
+
+                            <!-- eCO₂仪表盘 -->
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <div class="gauge-chart" ref="eco2Gauge"></div>
+                                <div style="text-align: center; ">
+                                    <div style="font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 4px;">
+                                        eCO₂
+                                    </div>
+                                    <div style="font-size: 14px; color: #ffb74d;">{{ eco2LevelText }}</div>
+                                </div>
+                            </div>
+
+                            <!-- TVOC仪表盘 -->
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <div class="gauge-chart" ref="tvocGauge"></div>
+                                <div style="text-align: center; ">
+                                    <div style="font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 4px;">
+                                        TVOC
+                                    </div>
+                                    <div style="font-size: 14px; color: #f06292;">{{ tvocLevelText }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右栏：3个折线统计图 -->
+            <div class="flex-column">
+                <div class="card" style="flex: 1 1 0;">
+                    <div style="display: flex; flex-direction: column; height: 100%;">
+                        <div style="flex: 0 0 auto;">
+                            <div class="header-info-bar">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 18px; color: #fff; font-weight: bold;">环境数据</span>
+                                    <el-icon style="color: #00eaff; font-size: 22px;">
+                                        <component :is="WarningFilled" />
+                                    </el-icon>
+                                    <span style="font-size: 14px; color: #aaa;">实时监测</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 12px;">
+                            <div class="chart" ref="tempChart"></div>
+                            <div class="chart" ref="humiChart"></div>
+                            <div class="chart" ref="noiseChart"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div> <!-- 关闭dashboard -->
+
+        <!-- 服务器配置对话框 -->
+        <el-dialog v-model="showServerConfig" title="服务器配置" width="400px" :modal="true" :close-on-click-modal="false">
+            <div style="padding: 20px 0;">
+                <p style="color: #666; margin-bottom: 20px; font-size: 14px;">
+                    当前服务器地址: <span style="color: #409eff; font-weight: bold;">{{ currentServerUrl }}</span>
+                </p>
+                <el-form :model="serverConfigForm" label-width="120px">
+                    <el-form-item label="服务器IP地址:">
+                        <el-input v-model="serverConfigForm.serverIp" placeholder="例如: 192.168.1.100" />
+                        <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                            留空则使用当前主机地址，端口固定为5051
+                        </div>
+                    </el-form-item>
+                </el-form>
+            </div>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="showServerConfig = false">取消</el-button>
+                    <el-button type="primary" @click="saveServerConfig">保存并重新加载</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
+    </div> <!-- 关闭app -->
+    <script>
+        const { createApp, onMounted, ref } = Vue;
+        createApp({
+            setup() {
+                const now = ref('');
+                const data = Vue.reactive({
+                    temperature: '-', humidity: '-', aqi: 0, eco2: '-', tvoc: '-',
+                    uv_raw: '-', uv_index: 0, noise: '-', camera: '',
+                    suggestion: '获取中...', suggestionHtml: '',
+                    suggestionIndoor: '获取中...', suggestionIndoorHtml: '',
+                    suggestionOutdoor: '获取中...', suggestionOutdoorHtml: '',
+                    weather: '-', wind_dir: '-',
+                    outdoor_temp: '-', pm25: '-',
+                    cameras: ['', '', '', ''] // 新增4路监控
+                });
+                const weekMap = ['日', '一', '二', '三', '四', '五', '六'];
+                const dateStr = ref('');
+                const aiRefreshing = ref(false); // AI建议刷新状态
+                const updateDateStr = () => {
+                    const nowDate = new Date();
+                    dateStr.value = `${nowDate.getFullYear()}年${nowDate.getMonth() + 1}月${nowDate.getDate()}日 星期${weekMap[nowDate.getDay()]}`;
+                    now.value = nowDate.toLocaleTimeString('zh-CN', { hour12: false });
+                };
+                setInterval(updateDateStr, 1000);
+                updateDateStr();
+                const mqttStatus = ref('连接中...');
+
+                // 服务器地址配置 - 支持局域网访问
+                const getServerUrl = () => {
+                    // 检查URL参数中是否指定了服务器地址
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const serverParam = urlParams.get('server');
+                    if (serverParam) {
+                        return `http://${serverParam}:5051`;
+                    }
+
+                    // 从localStorage读取保存的服务器地址
+                    const savedServer = localStorage.getItem('env-monitor-server');
+                    if (savedServer) {
+                        return `http://${savedServer}:5051`;
+                    }
+
+                    // 默认使用当前主机地址（这样可以自动适应局域网访问）
+                    const currentHost = window.location.hostname;
+                    return `http://${currentHost}:5051`;
+                };
+
+                const serverUrl = getServerUrl();
+                console.log('使用服务器地址:', serverUrl);
+
+                // 定时获取MQTT连接状态
+                // 定时获取MQTT连接状态
+                setInterval(async () => {
+                    try {
+                        const res = await axios.get(`${serverUrl}/api/status`, { timeout: 2000 });
+                        if (res.data && res.data.mqtt_connected === true) {
+                            mqttStatus.value = '已连接';
+                        } else {
+                            mqttStatus.value = '未连接';
+                        }
+                    } catch (e) {
+                        mqttStatus.value = '未连接';
+                    }
+                }, 3000);
+
+                const tempChart = ref(null);
+                const humiChart = ref(null);
+                const noiseChart = ref(null);
+                const aqiGauge = ref(null);
+                const uvGauge = ref(null);
+                const eco2Gauge = ref(null);
+                const tvocGauge = ref(null);
+
+
+                // 仪表盘美化配置
+                const renderGauges = () => {
+                    // AQI 配色与等级（5级：蓝、绿、黄、橙、红）
+                    let aqiColor = '#3498ff', aqiLevel = 1, aqiValue = Number(data.aqi);
+                    if (aqiValue > 4) { aqiColor = '#ff3b30'; aqiLevel = 5; }
+                    else if (aqiValue > 3) { aqiColor = '#ff9500'; aqiLevel = 4; }
+                    else if (aqiValue > 2) { aqiColor = '#ffd600'; aqiLevel = 3; }
+                    else if (aqiValue > 1) { aqiColor = '#34c759'; aqiLevel = 2; }
+                    else { aqiColor = '#3498ff'; aqiLevel = 1; }
+                    echarts.init(aqiGauge.value).setOption({
+                        series: [{
+                            type: 'gauge',
+                            startAngle: 180,
+                            endAngle: 0,
+                            min: 1,
+                            max: 5,
+                            splitNumber: 4,
+                            axisLine: {
+                                lineStyle: {
+                                    width: 6,
+                                    color: [
+                                        [0.2, '#3498ff'], // 蓝
+                                        [0.4, '#34c759'], // 绿
+                                        [0.6, '#ffd600'], // 黄
+                                        [0.8, '#ff9500'], // 橙
+                                        [1, '#ff3b30']  // 红
+                                    ]
+                                }
+                            },
+                            pointer: {
+                                icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', // 针尖在(0,0)，指向数据
+                                length: '20%',
+                                width: 20,
+                                offsetCenter: [0, '-20%'],
+                                itemStyle: { color: 'auto' }
+                            },
+                            axisTick: {
+                                length: 12,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 2
+                                }
+                            },
+                            splitLine: {
+                                length: 20,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 5
+                                }
+                            },
+                            axisLabel: {
+                                distance: -60,
+                                color: '#999',
+                                fontSize: 18,
+                                formatter: function (value) {
+                                    const map = { 1: '非常好', 2: '好', 3: '一般', 4: '差', 5: '极差' };
+                                    return map[value] || value;
+                                }
+                            },
+                            title: { offsetCenter: [0, '-10%'], fontSize: 20, text: 'AQI' },
+                            detail: {
+                                valueAnimation: true,
+                                fontSize: 30,
+                                color: aqiColor,
+                                offsetCenter: [0, '35%'],
+                                formatter: function (v) { return aqiValue; }
+                            },
+                            data: [{ value: aqiValue }]
+                        }]
+                    });
+                    // UV 配色与等级（5级：蓝、绿、黄、橙、红）
+                    let uvColor = '#3498ff', uvValue = Number(data.uv_index), uvLevel = 0;
+                    if (uvValue > 3) { uvColor = '#ff3b30'; uvLevel = 4; }
+                    else if (uvValue > 2) { uvColor = '#ff9500'; uvLevel = 3; }
+                    else if (uvValue > 1) { uvColor = '#ffd600'; uvLevel = 2; }
+                    else if (uvValue > 0) { uvColor = '#34c759'; uvLevel = 1; }
+                    else { uvColor = '#3498ff'; uvLevel = 0; }
+                    echarts.init(uvGauge.value).setOption({
+                        series: [{
+                            type: 'gauge',
+                            startAngle: 180,
+                            endAngle: 0,
+                            min: 0,
+                            max: 4,
+                            splitNumber: 4,
+                            axisLine: {
+                                lineStyle: {
+                                    width: 6,
+                                    color: [
+                                        [0.2, '#3498ff'], // 蓝
+                                        [0.4, '#34c759'], // 绿
+                                        [0.6, '#ffd600'], // 黄
+                                        [0.8, '#ff9500'], // 橙
+                                        [1, '#ff3b30']  // 红
+                                    ]
+                                }
+                            },
+                            pointer: {
+                                icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', // 针尖在(0,0)，指向数据
+                                length: '20%',
+                                width: 20,
+                                offsetCenter: [0, '-20%'],
+                                itemStyle: { color: 'auto' }
+                            },
+                            axisTick: {
+                                length: 12,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 2
+                                }
+                            },
+                            splitLine: {
+                                length: 20,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 5
+                                }
+                            },
+                            axisLabel: {
+                                distance: -60,
+                                color: '#999',
+                                fontSize: 18,
+                                formatter: function (value) {
+                                    const map = { 0: '低', 1: '中', 2: '高', 3: '很高', 4: '极高' };
+                                    return map[value] || value;
+                                }
+                            },
+                            title: { show: true, offsetCenter: [0, '60%'], color: '#aaa', fontSize: 18, text: 'UV' },
+                            detail: {
+                                valueAnimation: true,
+                                fontSize: 32,
+                                color: uvColor,
+                                offsetCenter: [0, '35%'],
+                                formatter: function (v) { return uvValue; }
+                            },
+                            data: [{ value: uvValue }]
+                        }]
+                    });
+                    // eCO₂ 配色与等级（5级：蓝、绿、黄、橙、红）
+                    let eco2Color = '#3498ff', eco2Value = Number(data.eco2), eco2Level = 1;
+                    if (eco2Value > 1500) { eco2Color = '#ff3b30'; eco2Level = 5; }
+                    else if (eco2Value > 1000) { eco2Color = '#ff9500'; eco2Level = 4; }
+                    else if (eco2Value > 800) { eco2Color = '#ffd600'; eco2Level = 3; }
+                    else if (eco2Value > 600) { eco2Color = '#34c759'; eco2Level = 2; }
+                    else { eco2Color = '#3498ff'; eco2Level = 1; }
+                    echarts.init(eco2Gauge.value).setOption({
+                        series: [{
+                            type: 'gauge',
+                            startAngle: 180,
+                            endAngle: 0,
+                            min: 400,
+                            max: 1500,
+                            splitNumber: 4,
+                            axisLine: {
+                                lineStyle: {
+                                    width: 6,
+                                    color: [
+                                        [0.2, '#3498ff'], // 蓝
+                                        [0.4, '#34c759'], // 绿
+                                        [0.6, '#ffd600'], // 黄
+                                        [0.8, '#ff9500'], // 橙
+                                        [1, '#ff3b30']  // 红
+                                    ]
+                                }
+                            },
+                            pointer: {
+                                icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z',
+
+                                length: '20%',
+                                width: 20,
+                                offsetCenter: [0, '-20%'],
+                                itemStyle: { color: 'auto' }
+                            },
+                            axisTick: {
+                                length: 12,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 2
+                                }
+                            },
+                            splitLine: {
+                                length: 20,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 5
+                                }
+                            },
+                            axisLabel: {
+                                distance: -60,
+                                color: '#999',
+                                fontSize: 18,
+                                formatter: function (value) {
+                                    const map = { 400: '非常好', 600: '好', 800: '一般', 1000: '差', 1500: '严重' };
+                                    return map[value] || value;
+                                }
+                            },
+                            title: { show: true, offsetCenter: [0, '60%'], color: '#aaa', fontSize: 18, text: 'eCO₂' },
+                            detail: {
+                                valueAnimation: true,
+                                fontSize: 32,
+                                color: eco2Color,
+                                offsetCenter: [0, '35%'],
+                                formatter: function (v) { return eco2Value; }
+                            },
+                            data: [{ value: eco2Value }]
+                        }]
+                    });
+                    // TVOC 配色与等级（4级：绿、黄、橙、红）
+                    let tvocColor = '#34c759', tvocValue = Number(data.tvoc), tvocLevel = 1;
+                    if (tvocValue >= 6000) { tvocColor = '#ff3b30'; tvocLevel = 4; }
+                    else if (tvocValue >= 750) { tvocColor = '#ff9500'; tvocLevel = 3; }
+                    else if (tvocValue >= 50) { tvocColor = '#ffd600'; tvocLevel = 2; }
+                    else { tvocColor = '#34c759'; tvocLevel = 1; }
+                    echarts.init(tvocGauge.value).setOption({
+                        series: [{
+                            type: 'gauge',
+                            startAngle: 180,
+                            endAngle: 0,
+                            min: 0,
+                            max: 6000,
+                            splitNumber: 4,
+                            axisLine: {
+                                lineStyle: {
+                                    width: 6,
+                                    color: [
+                                        [0.25, '#34c759'], // 绿
+                                        [0.5, '#ffd600'], // 黄
+                                        [0.75, '#ff9500'], // 橙
+                                        [1, '#ff3b30']  // 红
+                                    ]
+                                }
+                            },
+                            pointer: {
+                                icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', // 针尖在(0,0)，指向数据
+                                length: '20%',
+                                width: 20,
+                                offsetCenter: [0, '-20%'],
+                                itemStyle: { color: 'auto' }
+                            },
+                            axisTick: {
+                                length: 12,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 2
+                                }
+                            },
+                            splitLine: {
+                                length: 20,
+                                lineStyle: {
+                                    color: 'auto',
+                                    width: 5
+                                }
+                            },
+                            axisLabel: {
+                                distance: -60,
+                                color: '#999',
+                                fontSize: 18,
+                                formatter: function (value) {
+                                    const map = { 0: '正常', 50: '一般', 750: '不好', 6000: '严重' };
+                                    return map[value] || value;
+                                }
+                            },
+                            title: { offsetCenter: [0, '60%'], color: '#aaa', fontSize: 18, text: 'TVOC' },
+                            detail: {
+                                valueAnimation: true,
+                                fontSize: 32,
+                                color: tvocColor,
+                                offsetCenter: [0, '35%'],
+                                formatter: function (v) { return tvocValue; }
+                            },
+                            data: [{ value: tvocValue }]
+                        }]
+                    });
+                };
+                const aqiLevelText = Vue.computed(() => {
+                    const v = Number(data.aqi);
+                    if (v <= 1) return '非常好';
+                    if (v <= 2) return '好';
+                    if (v <= 3) return '一般';
+                    if (v <= 4) return '差';
+                    return '极差';
+                });
+                const uvLevelText = Vue.computed(() => {
+                    const v = Number(data.uv_index);
+                    if (v <= 0) return '低';
+                    if (v <= 1) return '中';
+                    if (v <= 3) return '高';
+                    if (v <= 4) return '很高';
+                    return '极高';
+                });
+                // eCO₂等级转换函数
+                function getEco2Level(v) {
+                    if (isNaN(v) || v === 400) return 0;
+                    if (v <= 600) return 1;
+                    if (v <= 800) return 2;
+                    if (v <= 1000) return 3;
+                    if (v <= 1500) return 4;
+                    return 5;
+                }
+                // TVOC等级转换函数
+                function getTvocLevel(v) {
+                    if (isNaN(v) || v === 0) return 0;
+                    if (v < 50) return 1;
+                    if (v < 750) return 2;
+                    if (v < 6000) return 3;
+                    return 4;
+                }
+                // 时间轴生成函数，返回120个每两分钟一格的时间点
+                function getTimes() {
+                    const now = new Date();
+                    const times = [];
+                    now.setSeconds(0, 0);
+                    for (let i = 119; i >= 0; i--) {
+                        const t = new Date(now.getTime() - i * 2 * 60 * 1000);
+                        const h = t.getHours().toString().padStart(2, '0');
+                        const m = t.getMinutes().toString().padStart(2, '0');
+                        times.push(`${h}:${m}`);
+                    }
+                    return times;
+                }
+                const eco2LevelText = Vue.computed(() => {
+                    const v = Number(data.eco2);
+                    const level = getEco2Level(v);
+                    switch (level) {
+                        case 1: return '非常好';
+                        case 2: return '好';
+                        case 3: return '一般';
+                        case 4: return '差';
+                        case 5: return '严重';
+                        default: return '--';
+                    }
+                });
+                const tvocLevelText = Vue.computed(() => {
+                    const v = Number(data.tvoc);
+                    const level = getTvocLevel(v);
+                    switch (level) {
+                        case 1: return '正常';
+                        case 2: return '一般';
+                        case 3: return '差';
+                        case 4: return '严重';
+                        default: return '--';
+                    }
+                });
+
+
+                // 折线图美化配置
+                const renderCharts = () => {
+                    // 生成120个动态时间点，每两分钟一格
+                    const times = getTimes();
+                    // 生成100个随机数据
+                    const tempDataRaw = Array.from({ length: 120 }, () => (20 + Math.random() * 5).toFixed(1));
+                    const humiDataRaw = Array.from({ length: 120 }, () => (40 + Math.random() * 20).toFixed(1));
+                    const noiseDataRaw = Array.from({ length: 120 }, () => (45 + Math.random() * 10).toFixed(1));
+
+                    // 滑动平均函数，window=5
+                    function smooth(arr, win = 5) {
+                        const res = [];
+                        for (let i = 0; i < arr.length; i++) {
+                            let s = 0, c = 0;
+                            for (let j = Math.max(0, i - Math.floor(win / 2)); j <= Math.min(arr.length - 1, i + Math.floor(win / 2)); j++) {
+                                s += Number(arr[j]); c++;
+                            }
+                            res.push((s / c).toFixed(2));
+                        }
+                        return res;
+                    }
+                    const tempData = smooth(tempDataRaw, 5);
+                    const humiData = smooth(humiDataRaw, 5);
+                    const noiseData = smooth(noiseDataRaw, 5);
+
+                    // 动态计算y轴范围，留10%边距
+                    function getMinMax(arr, minLimit, maxLimit) {
+                        const nums = arr.map(Number).filter(v => !isNaN(v));
+                        if (!nums.length) return [minLimit, maxLimit];
+                        let min = Math.min(...nums), max = Math.max(...nums);
+                        if (min === max) {
+                            min = min - 1; max = max + 1;
+                        }
+                        const padding = (max - min) * 0.1;
+                        return [
+                            Math.floor(Math.max(minLimit, min - padding)),
+                            Math.ceil(Math.min(maxLimit, max + padding))
+                        ];
+                    }
+                    const [tempMin, tempMax] = getMinMax(tempData, 0, 50);
+                    const [humiMin, humiMax] = getMinMax(humiData, 0, 100);
+                    const [noiseMin, noiseMax] = getMinMax(noiseData, 0, 100);
+
+                    // 温度趋势
+                    const tempChartInstance = echarts.init(tempChart.value);
+                    tempChartInstance.setOption({
+                        title: {
+                            text: '温度趋势',
+                            left: 'center',
+                            top: 10,
+                            textStyle: { color: '#cccccc', fontWeight: 'bold', fontSize: 26 }
+                        },
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 30, right: 16, top: 60, bottom: 24 },
+                        xAxis: { type: 'category', data: times, axisLabel: { color: '#666', fontSize: 12 } },
+                        yAxis: {
+                            type: 'value',
+                            axisLabel: { color: '#666', fontSize: 14, formatter: '{value}' },
+                            min: tempMin,
+                            max: tempMax
+                        },
+                        series: [{
+                            name: '温度',
+                            type: 'line',
+                            data: tempData,
+                            smooth: false,
+                            symbol: 'circle',
+                            symbolSize: 8,
+                            lineStyle: { color: '#5470c6', width: 2 },
+                            itemStyle: { color: '#5470c6', borderColor: '#fff', borderWidth: 2 },
+                            areaStyle: undefined
+                        }],
+                        graphic: [{
+                            type: 'text',
+                            left: 10,
+                            top: 10,
+                            style: {
+                                text: '℃',
+                                fill: '#2d5be3',
+                                font: 'bold 18px \\"Noto Sans SC\\",sans-serif'
+                            },
+                            z: 100
+                        }]
+                    });
+                    // 湿度趋势
+                    const humiChartInstance = echarts.init(humiChart.value);
+                    humiChartInstance.setOption({
+                        title: {
+                            text: '湿度趋势',
+                            left: 'center',
+                            top: 10,
+                            textStyle: { color: '#1bbd7e', fontWeight: 'bold', fontSize: 26 }
+                        },
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 30, right: 16, top: 60, bottom: 24 },
+                        xAxis: { type: 'category', data: times, axisLabel: { color: '#666', fontSize: 12 } },
+                        yAxis: {
+                            type: 'value',
+                            axisLabel: { color: '#666', fontSize: 14, formatter: '{value}' },
+                            min: humiMin,
+                            max: humiMax
+                        },
+                        series: [{
+                            name: '湿度',
+                            type: 'line',
+                            data: humiData,
+                            smooth: false,
+                            symbol: 'circle',
+                            symbolSize: 8,
+                            lineStyle: { color: '#91cc75', width: 2 },
+                            itemStyle: { color: '#91cc75', borderColor: '#fff', borderWidth: 2 },
+                            areaStyle: undefined
+                        }],
+                        graphic: [{
+                            type: 'text',
+                            left: 10,
+                            top: 10,
+                            style: {
+                                text: '%',
+                                fill: '#1bbd7e',
+                                font: 'bold 18px \\"Noto Sans SC\\",sans-serif'
+                            },
+                            z: 100
+                        }]
+                    });
+                    // 噪音趋势
+                    const noiseChartInstance = echarts.init(noiseChart.value);
+                    noiseChartInstance.setOption({
+                        title: {
+                            text: '噪音趋势',
+                            left: 'center',
+                            top: 10,
+                            textStyle: { color: '#e6a23c', fontWeight: 'bold', fontSize: 26 }
+                        },
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 30, right: 16, top: 60, bottom: 24 },
+                        xAxis: { type: 'category', data: times, axisLabel: { color: '#666', fontSize: 12 } },
+                        yAxis: {
+                            type: 'value',
+                            axisLabel: { color: '#666', fontSize: 14, formatter: '{value}' },
+                            min: noiseMin,
+                            max: noiseMax
+                        },
+                        series: [{
+                            name: '噪音',
+                            type: 'line',
+                            data: noiseData,
+                            smooth: false,
+                            symbol: 'circle',
+                            symbolSize: 8,
+                            lineStyle: { color: '#fac858', width: 2 },
+                            itemStyle: { color: '#fac858', borderColor: '#fff', borderWidth: 2 },
+                            areaStyle: undefined
+                        }],
+                        graphic: [{
+                            type: 'text',
+                            left: 10,
+                            top: 10,
+                            style: {
+                                text: 'dBA',
+                                fill: '#e6a23c',
+                                font: 'bold 18px \\"Noto Sans SC\\",sans-serif'
+                            },
+                            z: 100
+                        }]
+                    });
+                };
+
+                // 视频加载控制（自动隐藏封面）
+                onMounted(() => {
+                    // 主题与粒子
+                    particlesJS.load('particles-js', 'https://cdn.jsdelivr.net/gh/VincentGarreau/particles.js/particles.json');
+
+                    // 视频刷新定时器 - 每3秒刷新一次
+                    const cameraTimer = setInterval(refreshCamera, 3000);
+
+                    // 初始渲染
+                    renderCharts();
+                    renderGauges();
+                    fetchData();
+                    // fetchData 每分钟自动刷新
+                    setInterval(fetchData, 60000);
+                    // AI建议每1小时自动刷新一次
+                    setInterval(() => getAISuggestion(data), 3600000);
+                });
+
+                // 获取AI建议，分室内和室外
+                const getAISuggestion = async (envData) => {
+                    try {
+                        // 室内建议（本地传感器数据）
+                        const resIndoor = await axios.post(`${serverUrl}/api/ai_suggestion`, {
+                            aqi: envData.aqi,
+                            uv_index: envData.uv_index, // 仅室内分析用
+                            temperature: `室内温度${envData.temperature}℃`,
+                            humidity: envData.humidity,
+                            noise: envData.noise,
+                            eco2: envData.eco2,
+                            tvoc: envData.tvoc,
+                            type: 'indoor',
+                            scene: 'primary_school'
+                        });
+                        data.suggestionIndoor = resIndoor.data.suggestion || '暂无室内AI建议';
+                        data.suggestionIndoorHtml = resIndoor.data.html || resIndoor.data.suggestion || '暂无室内AI建议';
+
+                        // 室外建议（不传紫外线，仅用气温/pm2.5/天气/风向）
+                        const resOutdoor = await axios.post(`${serverUrl}/api/ai_suggestion`, {
+                            weather: envData.weather,
+                            wind_dir: envData.wind_dir,
+                            outdoor_temp: `室外温度${envData.outdoor_temp}℃`,
+                            pm25: envData.pm25,
+                            type: 'outdoor',
+                            scene: 'primary_school'
+                        });
+                        data.suggestionOutdoor = resOutdoor.data.suggestion || '暂无室外AI建议';
+                        data.suggestionOutdoorHtml = resOutdoor.data.html || resOutdoor.data.suggestion || '暂无室外AI建议';
+                    } catch (e) {
+                        console.error('AI建议获取失败:', e);
+                        data.suggestionIndoor = '室内AI建议获取失败';
+                        data.suggestionIndoorHtml = '室内AI建议获取失败';
+                        data.suggestionOutdoor = '室外AI建议获取失败';
+                        data.suggestionOutdoorHtml = '室外AI建议获取失败';
+                    }
+                };
+
+                // 手动刷新AI建议
+                const refreshAISuggestion = async () => {
+                    if (aiRefreshing.value) return; // 防止重复点击
+
+                    aiRefreshing.value = true;
+                    console.log('手动刷新AI建议...');
+
+                    try {
+                        // 先显示加载状态
+                        data.suggestionIndoor = '正在更新室内AI建议...';
+                        data.suggestionIndoorHtml = '正在更新室内AI建议...';
+                        data.suggestionOutdoor = '正在更新室外AI建议...';
+                        data.suggestionOutdoorHtml = '正在更新室外AI建议...';
+
+                        // 调用AI建议获取函数
+                        await getAISuggestion(data);
+
+                        console.log('AI建议手动刷新完成');
+                    } catch (error) {
+                        console.error('手动刷新AI建议失败:', error);
+                        data.suggestionIndoor = 'AI建议刷新失败，请稍后重试';
+                        data.suggestionIndoorHtml = 'AI建议刷新失败，请稍后重试';
+                        data.suggestionOutdoor = 'AI建议刷新失败，请稍后重试';
+                        data.suggestionOutdoorHtml = 'AI建议刷新失败，请稍后重试';
+                    } finally {
+                        aiRefreshing.value = false;
+                    }
+                };
+
+                const fetchData = async () => {
+                    console.log('正在获取数据...');
+                    try {
+                        const res = await axios.get(`${serverUrl}/data`, { timeout: 3000 });
+                        console.log('后端数据', res.data);
+                        const safeData = Object.assign({
+                            weather: '暂无',
+                            wind_dir: '-',
+                            temperature: '-',
+                            humidity: '-',
+                            aqi: 0,
+                            eco2: '-',
+                            tvoc: '-',
+                            uv_raw: '-',
+                            uv_index: 0,
+                            noise: '-',
+                            camera: '',
+                            suggestion: '获取中...',
+                            suggestionHtml: '',
+                            outdoor_temp: '-',
+                            pm25: '-'
+                        }, res.data);
+                        console.log('safeData', safeData);
+                        Object.assign(data, {
+                            // 保证所有数据都为整数（或字符串'--'）
+                            temperature: formatDataValue(safeData.temperature),
+                            humidity: formatDataValue(safeData.humidity),
+                            aqi: formatDataValue(safeData.aqi),
+                            eco2: formatDataValue(safeData.eco2),
+                            tvoc: formatDataValue(safeData.tvoc),
+                            uv_raw: formatDataValue(safeData.uv_raw),
+                            uv_index: formatDataValue(safeData.uv_index),
+                            noise: formatDataValue(safeData.noise),
+                            camera: safeData.camera,
+                            suggestion: safeData.suggestion,
+                            weather: safeData.weather || '暂无',
+                            wind_dir: safeData.wind_dir || '-',
+                            outdoor_temp: formatDataValue(safeData.outdoor_temp),
+                            pm25: formatDataValue(safeData.pm25)
+                        });
+
+                        // 当摄像头数据更新时，更新时间戳以强制重新渲染
+                        if (safeData.camera) {
+                            refreshTimestamp.value = Date.now();
+                            console.log('摄像头数据更新，刷新时间戳:', refreshTimestamp.value);
+                        }
+                        // 再请求OpenWeather
+                        const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=tianshui&appid=242a27eb0e3a75518de493b5df62f296&lang=zh_cn&units=metric`;
+                        axios.get(weatherUrl).then(wres => {
+                            console.log('openweather', wres.data);
+                            data.weather = wres.data.weather[0].description;
+                            // 风向
+                            data.wind_dir = windDegToDirection(wres.data.wind.deg);
+                            data.outdoor_temp = wres.data.main.temp;
+                            // 获取PM2.5（需用空气污染接口）
+                            const lat = wres.data.coord.lat;
+                            const lon = wres.data.coord.lon;
+                            const airUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=242a27eb0e3a75518de493b5df62f296`;
+                            axios.get(airUrl).then(ares => {
+                                console.log('air', ares.data);
+                                if (ares.data && ares.data.list && ares.data.list[0] && ares.data.list[0].components) {
+                                    data.pm25 = ares.data.list[0].components.pm2_5;
+                                } else {
+                                    data.pm25 = '--';
+                                }
+                            }).catch(e => {
+                                console.error('air接口异常', e);
+                                data.pm25 = '--';
+                            }).finally(() => {
+                                // 保证pm2.5数据已更新后再获取AI建议
+                                mqttStatus.value = '已连接';
+                                Vue.nextTick().then(() => {
+                                    renderGauges();
+                                    renderCharts();
+                                    // 修正：紫外线指数取整
+                                    if (typeof data.uv_raw === 'number' || (typeof data.uv_raw === 'string' && !isNaN(Number(data.uv_raw)))) {
+                                        data.uv_raw = Math.round(Number(data.uv_raw));
+                                    }
+                                    if (typeof data.uv_index === 'number' || (typeof data.uv_index === 'string' && !isNaN(Number(data.uv_index)))) {
+                                        data.uv_index = Math.round(Number(data.uv_index));
+                                    }
+                                    getAISuggestion(data);
+                                });
+                            });
+                        }).catch(e => {
+                            console.error('openweather接口异常', e);
+                            // 保持原有weather/wind_dir/outdoor_temp/pm25
+                            data.outdoor_temp = '--'; // 修正：接口异常时不显示0℃
+                            mqttStatus.value = '已连接';
+                            Vue.nextTick().then(() => {
+                                renderGauges();
+                                renderCharts();
+                                getAISuggestion(data);
+                            });
+                        });
+                    } catch (e) {
+                        console.error('fetchData error', e);
+                        mqttStatus.value = '未连接（模拟数据）';
+                        Object.assign(data, {
+                            tvoc: 100 + Math.floor(Math.random() * 100),
+                            // 只在模拟数据时才用随机紫外线指数
+                            uv_raw: Math.floor(Math.random() * 3),
+                            uv_index: Math.floor(Math.random() * 3),
+                            noise: (45 + Math.random() * 10).toFixed(1),
+                            camera: '',
+                            suggestion: '模拟数据',
+                            weather: '晴',
+                            wind_dir: '东',
+                            outdoor_temp: (Math.random() * 35).toFixed(1),
+                            pm25: Math.floor(Math.random() * 150)
+                        });
+                        await Vue.nextTick();
+                        renderGauges();
+                        renderCharts();
+                        // 每次都获取AI建议（模拟数据）
+                        getAISuggestion(data);
+                    }
+                };
+                // 风向转换函数
+                function windDegToDirection(deg) {
+                    if (typeof deg !== 'number' || isNaN(deg)) return '--';
+                    const dirs = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+                    return dirs[Math.round(deg / 45) % 8];
+                }
+
+                // Element Plus图标引用
+                const CircleCheckFilled = ElementPlusIconsVue?.CircleCheckFilled || 'CircleCheckFilled';
+                const WarningFilled = ElementPlusIconsVue?.WarningFilled || 'WarningFilled';
+                const Loading = ElementPlusIconsVue?.Loading || 'Loading';
+                const Setting = ElementPlusIconsVue?.Setting || 'Setting';
+                const Refresh = ElementPlusIconsVue?.Refresh || 'Refresh';
+
+                // 数据格式化辅助函数
+                function formatDataValue(v) {
+                    if (v === '-' || v === undefined || v === null || v === '' || isNaN(Number(v))) {
+                        return '--';
+                    }
+                    const num = Number(v);
+                    return isNaN(num) ? '--' : Math.round(num);
+                }
+
+                // 保证所有环境数据显示为整数
+                function formatInt(v) {
+                    if (v === '-' || v === undefined || v === null || isNaN(Number(v))) return '--';
+                    return parseInt(Number(v));
+                }
+
+                // 添加摄像头URL状态管理
+                const cameraUrlWithTimestamp = Vue.computed(() => {
+                    if (!data.camera) return '';
+
+                    // 如果是base64图片，为了强制更新，添加时间戳作为参数（虽然无效，但可以触发Vue响应式更新）
+                    if (data.camera.startsWith('data:image')) {
+                        // 每次时间戳更新时，重新获取最新的base64数据
+                        const timestamp = refreshTimestamp.value; // 这里引用时间戳以触发响应式更新
+                        return data.camera;
+                    }
+
+                    // 如果是HTTP图片URL，添加时间戳防止缓存
+                    if (data.camera.startsWith('http') && /\.(jpg|jpeg|png|gif)(\?.*)?$/i.test(data.camera)) {
+                        const base = data.camera.split('?')[0];
+                        const timestamp = refreshTimestamp.value;
+                        return `${base}?t=${timestamp}`;
+                    }
+
+                    return data.camera;
+                });
+
+                // 添加刷新时间戳
+                const refreshTimestamp = ref(Date.now());
+
+                // 视频加载状态
+                const videoLoadState = ref('loading');
+
+                // 错误处理函数
+                const handleVideoError = () => {
+                    console.log('视频流加载失败');
+                    videoLoadState.value = 'error';
+                };
+
+                const handleVideoLoad = () => {
+                    console.log('视频流加载成功');
+                    videoLoadState.value = 'loaded';
+                };
+
+                const handleImageError = () => {
+                    console.log('图片加载失败，尝试刷新...');
+                    // 延迟重试
+                    setTimeout(() => {
+                        refreshTimestamp.value = Date.now();
+                    }, 2000);
+                };
+
+                const handleImageLoad = () => {
+                    console.log('图片加载成功');
+                    videoLoadState.value = 'loaded';
+                };
+
+                // 修改现有的refreshCamera函数
+                const refreshCamera = () => {
+                    // 对于所有类型的图片都强制刷新时间戳
+                    refreshTimestamp.value = Date.now();
+                    console.log('摄像头刷新时间戳更新:', refreshTimestamp.value);
+                };
+
+                // 服务器配置相关
+                const showServerConfig = ref(false);
+                const currentServerUrl = ref(serverUrl);
+                const serverConfigForm = ref({
+                    serverIp: ''
+                });
+
+                const saveServerConfig = () => {
+                    const newIp = serverConfigForm.value.serverIp.trim();
+                    if (newIp) {
+                        localStorage.setItem('env-monitor-server', newIp);
+                        const newUrl = `http://${newIp}:5051`;
+                        console.log('保存新的服务器地址:', newUrl);
+                    } else {
+                        localStorage.removeItem('env-monitor-server');
+                        console.log('清除自定义服务器地址，使用默认配置');
+                    }
+                    showServerConfig.value = false;
+                    // 重新加载页面以应用新配置
+                    window.location.reload();
+                };
+
+                // 返回新增的响应式变量
+                return {
+                    data, now, dateStr, tempChart, humiChart, noiseChart, aqiGauge, uvGauge, eco2Gauge, tvocGauge, aqiLevelText, uvLevelText, eco2LevelText, tvocLevelText, mqttStatus, CircleCheckFilled, WarningFilled, Loading, Setting, Refresh, formatInt,
+                    cameraUrlWithTimestamp,
+                    refreshTimestamp,
+                    videoLoadState,
+                    handleVideoError,
+                    handleVideoLoad,
+                    handleImageError,
+                    handleImageLoad,
+                    showServerConfig,
+                    currentServerUrl,
+                    serverConfigForm,
+                    saveServerConfig,
+                    aiRefreshing,
+                    refreshAISuggestion
+                };
+            }
+        })
+            .use(ElementPlus)
+            .mount('#app');
+    </script>
+
+</body>
+
+</html>
