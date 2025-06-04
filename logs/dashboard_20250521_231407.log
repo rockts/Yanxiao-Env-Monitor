@@ -1,0 +1,12 @@
+2025-05-21 23:14:07,097 [INFO] 智慧校园仪表盘启动
+2025-05-21 23:14:08,430 [WARNING] 配置文件不存在: /Users/rockts/SynologyDrive/Drive/Yanxiao-Env-Monitor/config/config.json，使用默认配置
+2025-05-21 23:14:11,016 [ERROR] 应用程序启动失败: 'SmartCampusDashboard' object has no attribute 'on_closing'
+Traceback (most recent call last):
+  File "<string>", line 1734, in <module>
+  File "<string>", line 322, in __init__
+AttributeError: 'SmartCampusDashboard' object has no attribute 'on_closing'
+2025-05-21 23:15:26,541 [INFO] 已启用模拟数据模式
+2025-05-21 23:15:26,542 [INFO] 接收到UV风险等级数据: 低
+2025-05-21 23:15:30,956 [INFO] 已关闭模拟数据模式
+2025-05-21 23:15:30,956 [INFO] 尝试连接MQTT服务器: 192.168.1.129:1883 (客户端ID: smart_campus_dashboard_client_001)
+2025-05-21 23:15:30,986 [ERROR] MQTT连接期间发生未知错误: AttributeError - 'SmartCampusDashboard' object has no attribute 'mqtt_client'
