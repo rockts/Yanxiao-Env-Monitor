@@ -49,12 +49,10 @@ dashboard/
 │
 ├── logs/                            # 日志文件目录
 │   ├── backend.log                  # 后端服务日志
-│   └── frontend.log                 # 前端服务日志
+│   └── sensor_data.log              # 传感器数据日志
 │
-└── env/                             # Python虚拟环境
-    ├── bin/
-    ├── lib/
-    └── pyvenv.cfg
+├── git_sync_guide.md                # Git多电脑同步指南
+└── 烟小智慧环境监测物联网大屏.mpdb    # Mind+ 硬件开发工程文件
 ```
 
 ## 快速启动
@@ -145,3 +143,38 @@ dashboard/
 ---
 
 如需定制或技术支持，请联系开发者。
+
+## Git 多电脑同步管理
+
+### 快速同步
+```bash
+# 快速提交并同步当前更改
+./scripts/quick_sync.sh "更新描述"
+
+# 或使用默认提交信息
+./scripts/quick_sync.sh
+```
+
+### 完整同步工具
+```bash
+# 运行交互式同步工具
+./scripts/git_sync_tool.sh
+```
+
+### 同步方法选择
+
+1. **远程仓库同步（推荐）**
+   - 在GitHub/GitLab/Gitee创建仓库
+   - 使用脚本添加远程仓库
+   - 自动推送拉取同步
+
+2. **Bundle文件同步**
+   - 适合私有项目或无网络环境
+   - 自动创建bundle文件
+   - 通过云盘分享bundle实现同步
+
+### 同步配置
+编辑 `scripts/sync_config.json` 配置同步参数：
+- 同步方法（remote/bundle）
+- 自动提交设置
+- 忽略文件模式
