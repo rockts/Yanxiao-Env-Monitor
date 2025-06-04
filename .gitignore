@@ -58,3 +58,6 @@ node_modules/
 # *.mp4
 # *.avi
 # *.mov
+
+# Assets folder (images, design files, etc.)
+assets/
