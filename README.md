@@ -79,6 +79,61 @@ python3 -m http.server 8080 --bind 0.0.0.0
 ./scripts/stop_services.sh
 ```
 
+## Git 多电脑同步管理
+
+本项目提供了完整的Git多电脑同步解决方案，支持通过云盘同步文件但保持Git提交记录一致。
+
+### 🚀 快速同步
+
+```bash
+# 快速提交并同步当前更改
+./scripts/quick_sync.sh "更新描述"
+
+# 使用默认提交信息
+./scripts/quick_sync.sh
+```
+
+### 🔧 完整同步管理
+
+```bash
+# 运行交互式同步工具
+./scripts/git_sync_tool.sh
+
+# 自动同步管理器
+./scripts/sync_manager.sh
+```
+
+### 📋 同步方案
+
+#### 方案A：远程仓库同步（推荐）
+- 在GitHub/GitLab/Gitee创建仓库
+- 支持多人协作和完整版本控制
+- 自动推送拉取同步
+
+#### 方案B：Bundle文件同步
+- 适合私有项目或无网络环境
+- 通过云盘传输Git bundle文件
+- 保持完整的Git历史记录
+
+### 🔄 自动同步（可选）
+
+```bash
+# 启动自动同步守护进程
+./scripts/sync_manager.sh start
+
+# 查看自动同步状态
+./scripts/sync_manager.sh status
+
+# 停止自动同步
+./scripts/sync_manager.sh stop
+```
+
+### 📖 详细文档
+
+- `git_sync_guide.md` - 基础同步指南
+- `MULTI_COMPUTER_SYNC_SETUP.md` - 完整设置指南
+- `scripts/sync_config.json` - 同步配置文件
+
 ## 技术架构
 
 ### 前端技术栈
