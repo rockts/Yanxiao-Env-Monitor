@@ -106,3 +106,19 @@ node_modules/
 
 # Assets folder (images, design files, etc.)
 assets/
+
+# Branch management and testing
+test_*.txt
+*_test.txt
+*.tmp
+*.backup
+.branch_backup/
+
+# Git merge artifacts
+*.orig
+*.rej
+
+# Development and debugging
+debug.log
+test.log
+*.debug
