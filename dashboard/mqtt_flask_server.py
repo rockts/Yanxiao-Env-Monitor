@@ -49,9 +49,9 @@ TOPIC_MAP = {
 
 mqtt_connected = False
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, reason_code, properties):
     global mqtt_connected
-    if rc == 0:
+    if reason_code == 0:
         mqtt_connected = True
         log.info("MQTT connected successfully")
         for topic in TOPIC_MAP:
@@ -59,12 +59,12 @@ def on_connect(client, userdata, flags, rc):
             log.info(f"Subscribed to {topic}")
     else:
         mqtt_connected = False
-        log.warning(f"MQTT connection failed, rc={rc}")
+        log.warning(f"MQTT connection failed, reason_code={reason_code}")
 
-def on_disconnect(client, userdata, rc):
+def on_disconnect(client, userdata, flags, reason_code, properties):
     global mqtt_connected
     mqtt_connected = False
-    log.warning(f"MQTT disconnected, rc={rc}")
+    log.warning(f"MQTT disconnected, reason_code={reason_code}")
 
 def on_message(client, userdata, msg):
     try:
@@ -79,7 +79,7 @@ def on_message(client, userdata, msg):
 
 def mqtt_worker():
     log.info("🚀 启动 MQTT 子线程")
-    client = mqtt.Client()
+    client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
     client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect

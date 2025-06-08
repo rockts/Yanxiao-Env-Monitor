@@ -49,8 +49,8 @@ echo "后端服务已启动，PID: $BACKEND_PID"
 sleep 3
 
 # 检查后端服务是否正常运行
-if curl -s http://localhost:5051/api/status > /dev/null; then
-    echo "✅ 后端服务启动成功 - http://localhost:5051"
+if curl -s http://localhost:5052/api/status > /dev/null; then
+    echo "✅ 后端服务启动成功 - http://localhost:5052"
 else
     echo "❌ 后端服务启动失败"
     exit 1
@@ -84,8 +84,8 @@ echo "   本地访问: http://localhost:8080/index.html"
 echo "   局域网访问: http://$(ipconfig getifaddr en0):8080/index.html"
 echo ""
 echo "🔧 后端API地址:"
-echo "   状态检查: http://localhost:5051/api/status"
-echo "   数据接口: http://localhost:5051/api/data"
+echo "   状态检查: http://localhost:5052/api/status"
+echo "   数据接口: http://localhost:5052/api/data"
 echo ""
 echo "📋 管理命令:"
 echo "   停止服务: ./scripts/stop_services.sh"

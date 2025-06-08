@@ -102,7 +102,20 @@
     </div>
 
     <script>
-        const serverUrl = 'http://localhost:5051';
+        const getServerUrl = () => {
+            const currentHost = window.location.hostname;
+            const currentPort = window.location.port;
+
+            // 如果通过3000端口访问（外网端口转发），则使用3000端口
+            if (currentPort === '3000') {
+                return `http://${currentHost}:3000`;
+            }
+
+            // 默认使用5052端口
+            return `http://${currentHost}:5052`;
+        };
+
+        const serverUrl = getServerUrl();
         let testResults = [];
 
         async function testData() {

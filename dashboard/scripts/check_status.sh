@@ -15,10 +15,10 @@ if lsof -i :5051 > /dev/null 2>&1; then
     echo "   ✅ 运行中 (PID: $PID)"
     
     # 检查API响应
-    if curl -s http://localhost:5051/api/status > /dev/null; then
+    if curl -s http://localhost:5052/api/status > /dev/null; then
         echo "   ✅ API响应正常"
         # 获取API状态详情
-        STATUS=$(curl -s http://localhost:5051/api/status)
+        STATUS=$(curl -s http://localhost:5052/api/status)
         echo "   📊 状态详情: $STATUS"
     else
         echo "   ❌ API响应异常"
@@ -95,7 +95,7 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📱 访问地址:"
 echo "   前端: http://localhost:8080/index.html"
-echo "   API:  http://localhost:5051/api/status"
+echo "   API:  http://localhost:5052/api/status"
 echo ""
 echo "📋 管理命令:"
 echo "   启动: ./scripts/start_services.sh"

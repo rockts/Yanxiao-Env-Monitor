@@ -280,10 +280,25 @@
                 const eco2Gauge = ref(null);
                 const tvocGauge = ref(null);
 
+                // 获取服务器URL的函数
+                const getServerUrl = () => {
+                    const currentHost = window.location.hostname;
+                    const currentPort = window.location.port;
+
+                    // 如果通过3000端口访问（外网端口转发），则使用3000端口
+                    if (currentPort === '3000') {
+                        return `http://${currentHost}:3000`;
+                    }
+
+                    // 默认使用5052端口
+                    return `http://${currentHost}:5052`;
+                };
+
                 // 获取数据
                 const fetchData = async () => {
                     try {
-                        const response = await axios.get('http://localhost:5051/data', { timeout: 2000 });
+                        const serverUrl = getServerUrl();
+                        const response = await axios.get(`${serverUrl}/data`, { timeout: 2000 });
                         Object.assign(data, response.data);
                         renderGauges();
                         renderCharts();
@@ -295,7 +310,8 @@
                 // MQTT状态检查
                 const checkMqttStatus = async () => {
                     try {
-                        const res = await axios.get('http://localhost:5051/api/status', { timeout: 2000 });
+                        const serverUrl = getServerUrl();
+                        const res = await axios.get(`${serverUrl}/api/status`, { timeout: 2000 });
                         mqttStatus.value = res.data?.mqtt_connected ? '已连接' : '未连接';
                     } catch (e) {
                         mqttStatus.value = '未连接';

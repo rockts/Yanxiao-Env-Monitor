@@ -618,41 +618,76 @@
 
                 // 服务器地址配置 - 支持局域网访问
                 const getServerUrl = () => {
+                    console.log('🌐 开始服务器地址检测...');
+
                     // 检查URL参数中是否指定了服务器地址
                     const urlParams = new URLSearchParams(window.location.search);
                     const serverParam = urlParams.get('server');
                     if (serverParam) {
+                        console.log('📍 检测到URL参数server:', serverParam);
                         return `http://${serverParam}:5052`;
                     }
 
                     // 从localStorage读取保存的服务器地址
                     const savedServer = localStorage.getItem('env-monitor-server');
                     if (savedServer) {
+                        console.log('💾 检测到localStorage保存的服务器:', savedServer);
                         return `http://${savedServer}:5052`;
                     }
 
-                    // 默认使用当前主机地址（这样可以自动适应局域网访问）
+                    // 检测当前访问方式
                     const currentHost = window.location.hostname;
+                    const currentPort = window.location.port;
+
+                    console.log('🔍 当前访问信息:');
+                    console.log('  - hostname:', currentHost);
+                    console.log('  - port:', `"${currentPort}"`);
+                    console.log('  - port type:', typeof currentPort);
+
+                    // 如果通过3000端口访问（外网端口转发），则使用3000端口
+                    if (currentPort === '3000') {
+                        console.log('✅ 端口匹配3000，使用3000端口');
+                        return `http://${currentHost}:3000`;
+                    }
+
+                    // 默认使用当前主机地址+5052端口
+                    console.log('📍 端口不匹配3000，使用默认5052端口');
                     return `http://${currentHost}:5052`;
                 };
 
                 const serverUrl = getServerUrl();
-                console.log('使用服务器地址:', serverUrl);
+                console.log('🔧 调试信息：');
+                console.log('  - 当前主机名:', window.location.hostname);
+                console.log('  - 当前端口:', window.location.port);
+                console.log('  - 端口类型:', typeof window.location.port);
+                console.log('  - 端口===3000?', window.location.port === '3000');
+                console.log('  - 最终服务器地址:', serverUrl);
 
-                // 定时获取MQTT连接状态
-                // 定时获取MQTT连接状态
-                setInterval(async () => {
+                // MQTT状态检测函数
+                const checkMqttStatus = async () => {
                     try {
+                        console.log('🔍 MQTT状态检测 - 请求地址:', `${serverUrl}/api/status`);
                         const res = await axios.get(`${serverUrl}/api/status`, { timeout: 2000 });
+                        console.log('📡 MQTT API响应:', res.data);
+
                         if (res.data && res.data.mqtt_connected === true) {
                             mqttStatus.value = '已连接';
+                            console.log('✅ MQTT状态更新: 已连接');
                         } else {
                             mqttStatus.value = '未连接';
+                            console.log('❌ MQTT状态更新: 未连接');
                         }
                     } catch (e) {
+                        console.log('❌ MQTT状态检测失败:', e.message);
                         mqttStatus.value = '未连接';
                     }
-                }, 3000);
+                };
+
+                // 立即执行一次MQTT状态检测
+                checkMqttStatus();
+
+                // 定时获取MQTT连接状态
+                setInterval(checkMqttStatus, 3000);
 
                 const tempChart = ref(null);
                 const humiChart = ref(null);

@@ -47,7 +47,11 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# 配置Flask应用，添加静态文件支持
+app = Flask(__name__, 
+            static_folder='frontend', 
+            static_url_path='/frontend',
+            template_folder='.')
 CORS(app)
 latest_data = {
     "temperature": 0,
@@ -64,9 +68,9 @@ latest_data = {
 
 mqtt_connected = False
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, reason_code, properties=None):
     global mqtt_connected
-    if rc == 0:
+    if reason_code == 0:
         mqtt_connected = True
         log.info(f"MQTT connected successfully to {MQTT_BROKER}")
         for topic in TOPIC_MAP:
@@ -74,12 +78,12 @@ def on_connect(client, userdata, flags, rc):
             log.info(f"Subscribed to {topic}")
     else:
         mqtt_connected = False
-        log.warning(f"MQTT connection failed to {MQTT_BROKER}, rc={rc}")
+        log.warning(f"MQTT connection failed to {MQTT_BROKER}, reason_code={reason_code}")
 
-def on_disconnect(client, userdata, rc):
+def on_disconnect(client, userdata, flags, reason_code=None, properties=None):
     global mqtt_connected
     mqtt_connected = False
-    log.warning(f"MQTT disconnected from {MQTT_BROKER}, rc={rc}")
+    log.warning(f"MQTT disconnected from {MQTT_BROKER}, reason_code={reason_code}")
 
 def on_message(client, userdata, msg):
     try:
@@ -94,7 +98,16 @@ def on_message(client, userdata, msg):
 
 def mqtt_worker():
     log.info("🚀 启动 MQTT 子线程")
-    client = mqtt.Client()
+    
+    # 兼容不同版本的paho-mqtt
+    try:
+        # 尝试使用新版本API
+        client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    except AttributeError:
+        # 回退到旧版本API
+        log.info("使用旧版本paho-mqtt API")
+        client = mqtt.Client()
+    
     client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
@@ -114,6 +127,31 @@ def start_mqtt_background():
 # 确保logs目录存在
 os.makedirs('logs', exist_ok=True)
 start_mqtt_background()
+
+@app.route("/")
+def index():
+    """提供前端页面"""
+    try:
+        with open('index.html', 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return jsonify({"error": "Frontend page not found"}), 404
+
+@app.route("/<path:filename>")
+def serve_html_files(filename):
+    """提供HTML文件（调试页面等）"""
+    # 只允许HTML文件
+    if not filename.endswith('.html'):
+        return jsonify({"error": "File not found"}), 404
+    
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return jsonify({"error": f"File {filename} not found"}), 404
+    except Exception as e:
+        log.error(f"Error serving {filename}: {e}")
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/data")
 def get_data():

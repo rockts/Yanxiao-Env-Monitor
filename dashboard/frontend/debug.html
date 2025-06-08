@@ -101,9 +101,15 @@
                 updateTime();
 
                 // 获取数据
+                const getServerUrl = () => {
+                    const currentHost = window.location.hostname;
+                    return `http://${currentHost}:5052`;
+                };
+
                 const fetchData = async () => {
                     try {
-                        const response = await axios.get('http://localhost:5051/data', { timeout: 2000 });
+                        const serverUrl = getServerUrl();
+                        const response = await axios.get(`${serverUrl}/data`, { timeout: 2000 });
                         Object.assign(data, response.data);
                         status.value = '已连接';
                     } catch (error) {

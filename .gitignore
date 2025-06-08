@@ -43,12 +43,50 @@ ENV/
 Thumbs.db
 
 # Logs and databases
-logs/*.log
+logs/
 *.log
 *.sqlite3
 *.sqlite3-journal
 
 # Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Project specific
+environment.mp
+
+# Security reports (documented separately)
+security_*.py
+security_*.json
+security_*.md
+*security_assessment*.py
+*security_report*.json
+comprehensive_security_*.py
+comprehensive_security_*.md
+detailed_security_assessment.py
+executive_summary_security_report.md
+final_security_assessment.py
+simple_security_assessment.py
+security_test_basic.py
+
+# Test and debug files
+test_*.py
+test_*.html
+*_test.py
+*_test.html
+debug.html
+mqtt_debug.html
+mqtt_status_debug.html
+port_detection_test.html
+port_test_simple.html
+
+# Backup files
+*.bak
+*.backup
+
+# Generated reports
+SECURITY_ASSESSMENT_COMPLETION_REPORT.md
 *.tmp
 *.temp
 *.bak
