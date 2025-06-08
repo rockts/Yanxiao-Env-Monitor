@@ -12,13 +12,16 @@ from datetime import datetime
 
 # 导入生产环境配置
 try:
-    from config_production import *
+    from config.config_production import *
 except ImportError:
-    # 回退到默认配置
-    MQTT_BROKER = "lot.lekee.cc"
-    MQTT_PORT = 1883
-    MQTT_USERNAME = "siot"
-    MQTT_PASSWORD = "dfrobot"
+    try:
+        from config_production import *
+    except ImportError:
+        # 回退到默认配置
+        MQTT_BROKER = "lot.lekee.cc"
+        MQTT_PORT = 1883
+        MQTT_USERNAME = "siot"
+        MQTT_PASSWORD = "dfrobot"
     DASHSCOPE_API_KEY = "sk-1515ee3c6dc74eaf9e2ba3e2c86aa87e"
     DASHSCOPE_API_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     SERVER_HOST = "0.0.0.0"

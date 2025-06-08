@@ -18,10 +18,10 @@ ssh $PRODUCTION_SERVER "mkdir -p $PRODUCTION_PATH/{dashboard,logs,scripts}"
 
 # 2. 上传核心文件
 echo "📤 上传核心文件..."
-scp "$LOCAL_PATH/dashboard/mqtt_flask_server_production.py" "$PRODUCTION_SERVER:$PRODUCTION_PATH/dashboard/"
-scp "$LOCAL_PATH/dashboard/config_production.py" "$PRODUCTION_SERVER:$PRODUCTION_PATH/dashboard/"
+scp "$LOCAL_PATH/dashboard/server/mqtt_flask_server_production.py" "$PRODUCTION_SERVER:$PRODUCTION_PATH/dashboard/"
+scp "$LOCAL_PATH/dashboard/config/config_production.py" "$PRODUCTION_SERVER:$PRODUCTION_PATH/dashboard/"
 scp "$LOCAL_PATH/dashboard/index.html" "$PRODUCTION_SERVER:$PRODUCTION_PATH/dashboard/"
-scp "$LOCAL_PATH/dashboard/requirements.txt" "$PRODUCTION_SERVER:$PRODUCTION_PATH/dashboard/"
+scp "$LOCAL_PATH/dashboard/config/requirements.txt" "$PRODUCTION_SERVER:$PRODUCTION_PATH/dashboard/"
 
 # 3. 上传脚本文件
 echo "📤 上传脚本文件..."

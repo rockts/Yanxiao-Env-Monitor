@@ -1,0 +1,6 @@
+Flask==2.3.3
+Flask-CORS==4.0.0
+paho-mqtt==1.6.1
+requests==2.31.0
+markdown==3.5.1
+psutil==5.9.6

@@ -16,10 +16,10 @@ ssh $USER@$SERVER "mkdir -p $REMOTE_PATH/dashboard $REMOTE_PATH/scripts"
 
 # 2. 上传核心文件
 echo "📤 上传dashboard文件..."
-scp dashboard/mqtt_flask_server_production.py $USER@$SERVER:$REMOTE_PATH/dashboard/
-scp dashboard/config_production.py $USER@$SERVER:$REMOTE_PATH/dashboard/
+scp dashboard/server/mqtt_flask_server_production.py $USER@$SERVER:$REMOTE_PATH/dashboard/
+scp dashboard/config/config_production.py $USER@$SERVER:$REMOTE_PATH/dashboard/
 scp dashboard/index.html $USER@$SERVER:$REMOTE_PATH/dashboard/
-scp dashboard/requirements.txt $USER@$SERVER:$REMOTE_PATH/dashboard/
+scp dashboard/config/requirements.txt $USER@$SERVER:$REMOTE_PATH/dashboard/
 
 # 3. 上传脚本文件
 echo "📤 上传脚本文件..."
