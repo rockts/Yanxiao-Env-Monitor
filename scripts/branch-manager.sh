@@ -19,6 +19,7 @@ show_help() {
     echo "可用命令:"
     echo "  status      - 显示当前分支状态和同步情况"
     echo "  sync        - 同步dev分支与master分支"
+    echo "  sync-all    - 同步当前分支到所有远程仓库"
     echo "  dev         - 切换到dev分支并拉取最新代码"
     echo "  master      - 切换到master分支并拉取最新代码"
     echo "  release     - 将dev分支的稳定代码发布到master"
@@ -28,9 +29,10 @@ show_help() {
     echo "  help        - 显示此帮助信息"
     echo ""
     echo "示例:"
-    echo "  $0 status   # 查看分支状态"
-    echo "  $0 dev      # 切换到开发分支"
-    echo "  $0 release  # 发布到生产分支"
+    echo "  $0 status    # 查看分支状态"
+    echo "  $0 dev       # 切换到开发分支"
+    echo "  $0 sync-all  # 同步到所有远程仓库"
+    echo "  $0 release   # 发布到生产分支"
 }
 
 # 显示分支状态
@@ -227,6 +229,25 @@ create_backup() {
     fi
 }
 
+# 多远程仓库同步
+sync_all_remotes() {
+    echo -e "${BLUE}=== 多远程仓库同步 ===${NC}"
+    
+    # 检查工作区是否干净
+    if [ -n "$(git status --porcelain)" ]; then
+        echo -e "${YELLOW}⚠️  工作区有未提交的更改，请先提交再同步${NC}"
+        return 1
+    fi
+    
+    # 运行多远程同步脚本
+    if [ -f "scripts/multi-remote-sync.sh" ]; then
+        ./scripts/multi-remote-sync.sh
+    else
+        echo -e "${RED}❌ 多远程同步脚本不存在${NC}"
+        return 1
+    fi
+}
+
 # 主函数
 main() {
     case "$1" in
@@ -235,6 +256,9 @@ main() {
             ;;
         "sync")
             sync_branches
+            ;;
+        "sync-all")
+            sync_all_remotes
             ;;
         "dev")
             switch_to_dev
