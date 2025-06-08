@@ -134,11 +134,26 @@ start_mqtt_background()
 @app.route("/")
 def index():
     """提供前端页面"""
-    try:
-        with open('index.html', 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        return jsonify({"error": "Frontend page not found"}), 404
+    # 尝试多个可能的路径
+    possible_paths = [
+        'index.html',  # 当前目录
+        '../index.html',  # 上级目录（dashboard目录）
+        '../../dashboard/index.html',  # 从项目根目录
+        '/home/rockts/env-monitor/dashboard/index.html'  # 绝对路径
+    ]
+    
+    for path in possible_paths:
+        try:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    log.info(f"成功加载前端页面: {path}")
+                    return f.read()
+        except Exception as e:
+            log.warning(f"无法读取 {path}: {e}")
+            continue
+    
+    log.error("未找到前端页面文件")
+    return jsonify({"error": "Frontend page not found", "checked_paths": possible_paths}), 404
 
 @app.route("/<path:filename>")
 def serve_html_files(filename):
@@ -147,14 +162,26 @@ def serve_html_files(filename):
     if not filename.endswith('.html'):
         return jsonify({"error": "File not found"}), 404
     
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        return jsonify({"error": f"File {filename} not found"}), 404
-    except Exception as e:
-        log.error(f"Error serving {filename}: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+    # 尝试多个可能的路径
+    possible_paths = [
+        filename,  # 当前目录
+        f'../{filename}',  # 上级目录（dashboard目录）
+        f'../../dashboard/{filename}',  # 从项目根目录
+        f'/home/rockts/env-monitor/dashboard/{filename}'  # 绝对路径
+    ]
+    
+    for path in possible_paths:
+        try:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    log.info(f"成功加载HTML文件: {path}")
+                    return f.read()
+        except Exception as e:
+            log.warning(f"无法读取 {path}: {e}")
+            continue
+    
+    log.error(f"未找到HTML文件: {filename}")
+    return jsonify({"error": f"File {filename} not found", "checked_paths": possible_paths}), 404
 
 @app.route("/data")
 def get_data():
