@@ -240,10 +240,13 @@ sync_all_remotes() {
     fi
     
     # 运行多远程同步脚本
-    if [ -f "scripts/multi-remote-sync.sh" ]; then
-        ./scripts/multi-remote-sync.sh
+    script_dir="$(dirname "$(realpath "$0")")"
+    sync_script="$script_dir/multi-remote-sync.sh"
+    
+    if [ -f "$sync_script" ]; then
+        "$sync_script"
     else
-        echo -e "${RED}❌ 多远程同步脚本不存在${NC}"
+        echo -e "${RED}❌ 多远程同步脚本不存在: $sync_script${NC}"
         return 1
     fi
 }
