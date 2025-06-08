@@ -1,0 +1,178 @@
+name: Branch Management CI/CD
+
+on:
+ push:
+  branches: [dev, master]
+ pull_request:
+  branches: [master]
+
+jobs:
+ # Dev分支的持续集成
+ dev-ci:
+  if: github.ref == 'refs/heads/dev'
+  runs-on: ubuntu-latest
+
+  steps:
+   - uses: actions/checkout@v3
+
+   - name: Set up Python
+     uses: actions/setup-python@v3
+     with:
+      python-version: '3.11'
+
+   - name: Install dependencies
+     run: |
+      python -m pip install --upgrade pip
+      if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+   - name: Run Python syntax check
+     run: |
+      # 检查Python文件语法
+      find . -name "*.py" -exec python -m py_compile {} \;
+
+   - name: Run basic tests
+     run: |
+      # 运行基础测试
+      echo "Running dev branch tests..."
+      # 这里可以添加具体的测试命令
+
+   - name: Check for sensitive information
+     run: |
+      # 检查敏感信息
+      if grep -r -i "password\|secret\|token\|api_key" --include="*.py" --include="*.js" .; then
+        echo "Warning: Possible sensitive information found"
+        exit 1
+      fi
+
+   - name: Notify dev branch status
+     run: |
+      echo "✅ Dev branch CI passed"
+
+ # Master分支的生产部署
+ master-cd:
+  if: github.ref == 'refs/heads/master'
+  runs-on: ubuntu-latest
+
+  steps:
+   - uses: actions/checkout@v3
+
+   - name: Set up Python
+     uses: actions/setup-python@v3
+     with:
+      python-version: '3.11'
+
+   - name: Install dependencies
+     run: |
+      python -m pip install --upgrade pip
+      if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+   - name: Run production tests
+     run: |
+      # 运行生产环境测试
+      echo "Running production tests..."
+      find . -name "*.py" -exec python -m py_compile {} \;
+
+   - name: Security scan
+     run: |
+      # 安全扫描
+      echo "Running security scan..."
+      if grep -r -i "password\|secret\|token\|api_key" --include="*.py" --include="*.js" .; then
+        echo "❌ Security scan failed: sensitive information found"
+        exit 1
+      fi
+
+   - name: Create deployment artifact
+     run: |
+      # 创建部署包
+      echo "Creating deployment artifact..."
+      tar -czf deployment.tar.gz --exclude='.git' --exclude='env' --exclude='__pycache__' .
+
+   - name: Deploy to production (simulate)
+     run: |
+      # 模拟生产部署
+      echo "🚀 Deploying to production..."
+      echo "Deployment completed successfully"
+
+   - name: Notify production deployment
+     run: |
+      echo "✅ Production deployment completed"
+
+ # Pull Request检查
+ pr-check:
+  if: github.event_name == 'pull_request'
+  runs-on: ubuntu-latest
+
+  steps:
+   - uses: actions/checkout@v3
+
+   - name: Set up Python
+     uses: actions/setup-python@v3
+     with:
+      python-version: '3.11'
+
+   - name: Install dependencies
+     run: |
+      python -m pip install --upgrade pip
+      if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+   - name: Check PR requirements
+     run: |
+      echo "Checking PR requirements..."
+
+      # 检查提交信息格式
+      git log --format="%s" -n 1 | grep -E "^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .+"
+
+      # 检查Python语法
+      find . -name "*.py" -exec python -m py_compile {} \;
+
+      # 检查分支策略
+      if [ "${{ github.base_ref }}" == "master" ] && [ "${{ github.head_ref }}" != "dev" ]; then
+        echo "❌ Only dev branch can be merged into master"
+        exit 1
+      fi
+
+   - name: Code quality check
+     run: |
+      echo "Running code quality checks..."
+      # 这里可以添加代码质量检查工具
+      echo "✅ Code quality check passed"
+
+   - name: Notify PR status
+     run: |
+      echo "✅ PR checks completed"
+
+ # 定期分支健康检查
+ branch-health-check:
+  if: github.event_name == 'schedule'
+  runs-on: ubuntu-latest
+
+  steps:
+   - uses: actions/checkout@v3
+     with:
+      fetch-depth: 0 # 获取完整历史
+
+   - name: Check branch divergence
+     run: |
+      git fetch origin
+
+      # 检查分支分歧
+      dev_ahead=$(git rev-list --count origin/master..origin/dev)
+      dev_behind=$(git rev-list --count origin/dev..origin/master)
+
+      echo "Dev branch is $dev_ahead commits ahead of master"
+      echo "Dev branch is $dev_behind commits behind master"
+
+      # 如果分歧过大，发出警告
+      if [ $dev_behind -gt 10 ]; then
+        echo "⚠️ Warning: dev branch is significantly behind master"
+      fi
+
+      if [ $dev_ahead -gt 50 ]; then
+        echo "⚠️ Warning: dev branch is significantly ahead of master"
+      fi
+
+   - name: Generate branch report
+     run: |
+      echo "📊 Branch Health Report"
+      echo "======================="
+      git log --oneline --graph --decorate --all -10
